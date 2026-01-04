@@ -643,15 +643,15 @@ def remove_character(character_id: str) -> dict:
 def set_character_voice(
     character_id: str,
     provider: str,
-    voice_id: str,
+    voice_ref: str,
     settings: Optional[dict] = None,
 ) -> dict:
     """Assign a voice configuration to a character.
 
-    For Maya1: provider='maya1', voice_id is the voice description.
-    For Chatterbox: provider='chatterbox', voice_id can be any identifier.
+    For Maya1: provider='maya1', voice_ref is the voice description.
+    For Chatterbox: provider='chatterbox', voice_ref can be any identifier.
     """
-    character = set_voice(character_id, provider, voice_id, settings)
+    character = set_voice(character_id, provider, voice_ref, settings)
     return {
         "success": True,
         "message": f'Voice assigned to "{character.name}"',

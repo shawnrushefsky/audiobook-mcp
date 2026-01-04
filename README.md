@@ -239,7 +239,7 @@ async with stdio_client(server_params) as (read, write):
 | `get_characters` | List all characters with segment counts |
 | `modify_character` | Update character details |
 | `remove_character` | Remove a character |
-| `set_character_voice` | Assign voice configuration (provider, voice_id, settings) |
+| `set_character_voice` | Assign voice configuration (provider, voice_ref, settings) |
 | `clear_character_voice` | Remove voice assignment from a character |
 
 ### Voice Sample Management

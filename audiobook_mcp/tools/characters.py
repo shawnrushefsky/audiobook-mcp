@@ -168,7 +168,7 @@ def delete_character(character_id: str) -> None:
 def set_voice(
     character_id: str,
     provider: str,
-    voice_id: str,
+    voice_ref: str,
     settings: Optional[dict[str, Any]] = None,
 ) -> Character:
     """Set voice configuration for a character."""
@@ -180,11 +180,11 @@ def set_voice(
     if not existing:
         raise ValueError(f"Character not found: {character_id}")
 
-    voice_config = VoiceConfig(provider=provider, voice_id=voice_id, settings=settings)
+    voice_config = VoiceConfig(provider=provider, voice_ref=voice_ref, settings=settings)
     voice_config_json = json.dumps(
         {
             "provider": voice_config.provider,
-            "voice_id": voice_config.voice_id,
+            "voice_ref": voice_config.voice_ref,
             "settings": voice_config.settings,
         }
     )

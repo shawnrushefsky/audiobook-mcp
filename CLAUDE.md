@@ -67,9 +67,9 @@ Character (1) ←→ (N) VoiceSamples
 
 1. **Per-Project Storage**: Each project has its own `.audiobook/` folder containing the SQLite database and audio files. This makes projects portable and self-contained.
 
-2. **Voice Provider Agnostic**: Voice configurations are stored as JSON with `provider`, `voice_id`, and optional `settings`. This allows integration with any TTS service.
+2. **Voice Provider Agnostic**: Voice configurations are stored as JSON with `provider`, `voice_ref`, and optional `settings`. This allows integration with any TTS service.
 
-3. **Voice Cloning Workflow**: Use Maya1 to create voice samples from descriptions, then use Fish Speech to clone those voices for long-form generation.
+3. **Voice Cloning Workflow**: Use Maya1 to create voice samples from descriptions, then use Chatterbox to clone those voices for long-form generation.
 
 4. **Single Active Project**: The server maintains one open project at a time via the connection singleton.
 

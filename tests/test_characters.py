@@ -112,13 +112,13 @@ class TestVoiceConfiguration:
         character = set_voice(
             alice_id,
             provider="maya1",
-            voice_id="Realistic female voice in the 20s age with american accent.",
+            voice_ref="Realistic female voice in the 20s age with american accent.",
         )
 
         assert character.voice_config is not None
         config = json.loads(character.voice_config)
         assert config["provider"] == "maya1"
-        assert "20s" in config["voice_id"]
+        assert "20s" in config["voice_ref"]
 
     def test_set_voice_chatterbox(self, project_with_characters):
         """Test setting Chatterbox voice configuration."""
@@ -126,7 +126,7 @@ class TestVoiceConfiguration:
         character = set_voice(
             bob_id,
             provider="chatterbox",
-            voice_id="bob-voice",
+            voice_ref="bob-voice",
             settings={"exaggeration": 0.7, "cfg_weight": 0.4},
         )
 
@@ -140,7 +140,7 @@ class TestVoiceConfiguration:
         alice_id = project_with_characters["characters"]["alice"].id
 
         # First set a voice
-        set_voice(alice_id, provider="maya1", voice_id="test voice")
+        set_voice(alice_id, provider="maya1", voice_ref="test voice")
 
         # Then clear it
         character = clear_voice(alice_id)

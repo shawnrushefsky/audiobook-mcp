@@ -158,5 +158,5 @@ class VoiceConfig:
     """Voice configuration structure (stored as JSON in voice_config)."""
 
     provider: str  # e.g., "maya1", "chatterbox", "elevenlabs"
-    voice_id: str  # For maya1: description, for chatterbox: identifier
+    voice_ref: str  # For maya1: voice description, for others: voice identifier
     settings: Optional[dict[str, Any]] = None

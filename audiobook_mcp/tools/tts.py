@@ -1312,7 +1312,7 @@ def generate_segment_audio(
             if character and character.voice_config:
                 voice_config = json.loads(character.voice_config)
                 if voice_config.get("provider") == "maya1":
-                    voice_description = voice_config.get("voice_id")
+                    voice_description = voice_config.get("voice_ref")
 
         voice_description = voice_description or DEFAULT_DESCRIPTION
 
@@ -1404,7 +1404,7 @@ def generate_voice_sample(
     if not voice_description and character.voice_config:
         voice_config = json.loads(character.voice_config)
         if voice_config.get("provider") == "maya1":
-            voice_description = voice_config.get("voice_id")
+            voice_description = voice_config.get("voice_ref")
 
     voice_description = voice_description or DEFAULT_DESCRIPTION
 
