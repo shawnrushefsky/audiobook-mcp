@@ -99,7 +99,7 @@ atexit.register(close_database)
 
 
 # ============================================================================
-# Async Job Tracking System
+# Queue-Based Job System (single worker to prevent OOM from concurrent TTS)
 # ============================================================================
 
 
@@ -107,6 +107,7 @@ class JobStatus(Enum):
     """Status of an async job."""
 
     PENDING = "pending"
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -126,11 +127,83 @@ class AsyncJob:
     result: Optional[dict] = None
     error: Optional[str] = None
     metadata: dict = field(default_factory=dict)
+    queue_position: Optional[int] = None
 
 
-# Global job storage
+@dataclass
+class QueuedJob:
+    """A job waiting in the queue with its execution details."""
+
+    job: AsyncJob
+    func: Any
+    args: tuple
+    kwargs: dict
+
+
+# Global job storage and queue
 _jobs: dict[str, AsyncJob] = {}
 _jobs_lock = threading.Lock()
+_job_queue: list[QueuedJob] = []  # Simple list as queue (FIFO)
+_queue_lock = threading.Lock()
+_worker_thread: Optional[threading.Thread] = None
+_worker_running = False
+
+
+def _update_queue_positions():
+    """Update queue_position for all queued jobs."""
+    with _queue_lock:
+        for i, queued_job in enumerate(_job_queue):
+            queued_job.job.queue_position = i + 1
+
+
+def _worker_loop():
+    """Worker loop that processes jobs one at a time."""
+    global _worker_running
+    import sys
+
+    while _worker_running:
+        # Get next job from queue
+        queued_job = None
+        with _queue_lock:
+            if _job_queue:
+                queued_job = _job_queue.pop(0)
+                _update_queue_positions()
+
+        if queued_job is None:
+            # No jobs, sleep briefly and check again
+            threading.Event().wait(0.1)
+            continue
+
+        job = queued_job.job
+        try:
+            update_job(job.job_id, status=JobStatus.RUNNING)
+            job.queue_position = None
+            print(f"Starting job {job.job_id} ({job.job_type})", file=sys.stderr, flush=True)
+
+            result = queued_job.func(*queued_job.args, **queued_job.kwargs)
+
+            # Convert dataclass result to dict if needed
+            if hasattr(result, "__dataclass_fields__"):
+                result = asdict(result)
+
+            update_job(job.job_id, status=JobStatus.COMPLETED, progress=1.0, result=result)
+            print(f"Completed job {job.job_id}", file=sys.stderr, flush=True)
+
+        except Exception as e:
+            update_job(job.job_id, status=JobStatus.FAILED, error=str(e))
+            print(f"Failed job {job.job_id}: {e}", file=sys.stderr, flush=True)
+
+
+def _ensure_worker_running():
+    """Start the worker thread if not already running."""
+    global _worker_thread, _worker_running
+
+    if _worker_thread is not None and _worker_thread.is_alive():
+        return
+
+    _worker_running = True
+    _worker_thread = threading.Thread(target=_worker_loop, daemon=True)
+    _worker_thread.start()
 
 
 def create_job(job_type: str, metadata: Optional[dict] = None) -> AsyncJob:
@@ -152,6 +225,12 @@ def get_job(job_id: str) -> Optional[AsyncJob]:
     """Get a job by ID."""
     with _jobs_lock:
         return _jobs.get(job_id)
+
+
+def get_queue_length() -> int:
+    """Get the number of jobs waiting in the queue."""
+    with _queue_lock:
+        return len(_job_queue)
 
 
 def update_job(
@@ -186,22 +265,20 @@ def update_job(
         return job
 
 
-def run_job_async(job: AsyncJob, func, *args, **kwargs):
-    """Run a function asynchronously and update job status."""
+def enqueue_job(job: AsyncJob, func, *args, **kwargs):
+    """Add a job to the queue for processing by the worker."""
+    _ensure_worker_running()
 
-    def worker():
-        try:
-            update_job(job.job_id, status=JobStatus.RUNNING)
-            result = func(*args, **kwargs)
-            # Convert dataclass result to dict if needed
-            if hasattr(result, "__dataclass_fields__"):
-                result = asdict(result)
-            update_job(job.job_id, status=JobStatus.COMPLETED, progress=1.0, result=result)
-        except Exception as e:
-            update_job(job.job_id, status=JobStatus.FAILED, error=str(e))
+    queued_job = QueuedJob(job=job, func=func, args=args, kwargs=kwargs)
 
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
+    with _queue_lock:
+        _job_queue.append(queued_job)
+        job.status = JobStatus.QUEUED
+        job.queue_position = len(_job_queue)
+
+
+# Backwards compatibility alias
+run_job_async = enqueue_job
 
 
 # ============================================================================
@@ -770,19 +847,24 @@ def generate_audio_for_segment(
         engine: TTS engine to use.
         run_async: If True (default), runs generation in background and returns job_id.
                    Use get_job_status to check progress. If False, blocks until complete.
+
+    Note: Jobs are queued and processed one at a time to prevent memory issues.
     """
     if run_async:
-        # Create async job and run in background
+        # Create async job and add to queue
         job = create_job(
             job_type="generate_audio",
             metadata={"segment_id": segment_id, "engine": engine},
         )
-        run_job_async(job, generate_segment_audio, segment_id, description, engine)
+        enqueue_job(job, generate_segment_audio, segment_id, description, engine)
+        queue_len = get_queue_length()
         return {
             "success": True,
             "async": True,
             "job_id": job.job_id,
-            "message": f"Audio generation started (job {job.job_id}). Use get_job_status to check progress.",
+            "queue_position": job.queue_position,
+            "queue_length": queue_len,
+            "message": f"Audio generation queued (position {job.queue_position} of {queue_len}). Use get_job_status to check progress.",
         }
     else:
         # Run synchronously (may timeout for long audio)
@@ -815,6 +897,11 @@ def get_job_status(job_id: str) -> dict:
         "metadata": job.metadata,
     }
 
+    # Include queue position for queued jobs
+    if job.status == JobStatus.QUEUED and job.queue_position is not None:
+        response["queue_position"] = job.queue_position
+        response["queue_length"] = get_queue_length()
+
     if job.started_at:
         response["started_at"] = job.started_at.isoformat()
 
@@ -839,7 +926,7 @@ def list_jobs(
     """List async jobs, optionally filtered by status or type.
 
     Args:
-        status: Filter by status ('pending', 'running', 'completed', 'failed').
+        status: Filter by status ('pending', 'queued', 'running', 'completed', 'failed').
         job_type: Filter by job type (e.g., 'generate_audio').
         limit: Maximum number of jobs to return (default 20).
     """
@@ -852,7 +939,9 @@ def list_jobs(
             filter_status = JobStatus(status)
             jobs = [j for j in jobs if j.status == filter_status]
         except ValueError:
-            raise ValueError(f"Invalid status: {status}. Use: pending, running, completed, failed")
+            raise ValueError(
+                f"Invalid status: {status}. Use: pending, queued, running, completed, failed"
+            )
 
     if job_type:
         jobs = [j for j in jobs if j.job_type == job_type]
@@ -863,19 +952,23 @@ def list_jobs(
     # Apply limit
     jobs = jobs[:limit]
 
+    def job_to_dict(j: AsyncJob) -> dict:
+        d = {
+            "job_id": j.job_id,
+            "job_type": j.job_type,
+            "status": j.status.value,
+            "progress": j.progress,
+            "created_at": j.created_at.isoformat(),
+            "metadata": j.metadata,
+        }
+        if j.status == JobStatus.QUEUED and j.queue_position is not None:
+            d["queue_position"] = j.queue_position
+        return d
+
     return {
         "count": len(jobs),
-        "jobs": [
-            {
-                "job_id": j.job_id,
-                "job_type": j.job_type,
-                "status": j.status.value,
-                "progress": j.progress,
-                "created_at": j.created_at.isoformat(),
-                "metadata": j.metadata,
-            }
-            for j in jobs
-        ],
+        "queue_length": get_queue_length(),
+        "jobs": [job_to_dict(j) for j in jobs],
     }
 
 
