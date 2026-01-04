@@ -91,6 +91,9 @@ from .tools.audio import (
 )
 
 
+# Server version (should match pyproject.toml)
+__version__ = "0.2.0"
+
 # Create MCP server
 mcp = FastMCP("Audiobook MCP")
 
@@ -144,16 +147,19 @@ class QueuedJob:
 _jobs: dict[str, AsyncJob] = {}
 _jobs_lock = threading.Lock()
 _job_queue: list[QueuedJob] = []  # Simple list as queue (FIFO)
-_queue_lock = threading.Lock()
+_queue_lock = threading.RLock()  # Use RLock to allow reentrant locking
 _worker_thread: Optional[threading.Thread] = None
 _worker_running = False
 
 
 def _update_queue_positions():
-    """Update queue_position for all queued jobs."""
-    with _queue_lock:
-        for i, queued_job in enumerate(_job_queue):
-            queued_job.job.queue_position = i + 1
+    """Update queue_position for all queued jobs.
+
+    Note: Caller should hold _queue_lock or call with lock=True.
+    """
+    # No lock acquisition here - caller must hold the lock
+    for i, queued_job in enumerate(_job_queue):
+        queued_job.job.queue_position = i + 1
 
 
 def _worker_loop():
@@ -167,7 +173,7 @@ def _worker_loop():
         with _queue_lock:
             if _job_queue:
                 queued_job = _job_queue.pop(0)
-                _update_queue_positions()
+                _update_queue_positions()  # Safe - we hold the lock
 
         if queued_job is None:
             # No jobs, sleep briefly and check again
@@ -296,6 +302,188 @@ def to_dict(obj: Any) -> dict:
 
 
 # ============================================================================
+# MCP Resources (read-only data exposure)
+# ============================================================================
+
+
+@mcp.resource("audiobook://project")
+def resource_project() -> str:
+    """Current audiobook project information and statistics.
+
+    Returns project metadata, path, and segment/chapter counts.
+    Requires a project to be open.
+    """
+    try:
+        info = get_project_info()
+        return json.dumps(
+            {
+                "project": to_dict(info.project),
+                "path": info.path,
+                "stats": to_dict(info.stats),
+            },
+            indent=2,
+        )
+    except ValueError as e:
+        return json.dumps({"error": str(e), "hint": "Use open_audiobook_project first"})
+
+
+@mcp.resource("audiobook://characters")
+def resource_characters() -> str:
+    """All characters in the current project with voice configurations.
+
+    Returns character list with segment counts and voice settings.
+    Requires a project to be open.
+    """
+    try:
+        characters = get_characters_with_stats()
+        return json.dumps(
+            {
+                "count": len(characters),
+                "characters": [
+                    {
+                        **to_dict(c),
+                        "voice_config": json.loads(c.voice_config) if c.voice_config else None,
+                    }
+                    for c in characters
+                ],
+            },
+            indent=2,
+        )
+    except ValueError as e:
+        return json.dumps({"error": str(e), "hint": "Use open_audiobook_project first"})
+
+
+@mcp.resource("audiobook://chapters")
+def resource_chapters() -> str:
+    """All chapters in the current project with segment statistics.
+
+    Returns chapter list with segment counts and audio status.
+    Requires a project to be open.
+    """
+    try:
+        chapters = get_chapters_with_stats()
+        return json.dumps(
+            {"count": len(chapters), "chapters": [to_dict(c) for c in chapters]},
+            indent=2,
+        )
+    except ValueError as e:
+        return json.dumps({"error": str(e), "hint": "Use open_audiobook_project first"})
+
+
+@mcp.resource("audiobook://tts/status")
+def resource_tts_status() -> str:
+    """TTS engine availability and configuration status.
+
+    Returns which TTS engines are available (Maya1, Chatterbox, Fish Speech),
+    hardware info (CUDA, MPS, CPU), and setup instructions for unavailable engines.
+    """
+    from .tools.tts import check_tts
+
+    result = check_tts()
+    return json.dumps(to_dict(result), indent=2, default=str)
+
+
+# ============================================================================
+# MCP Prompts (reusable interaction templates)
+# ============================================================================
+
+
+@mcp.prompt()
+def audiobook_setup(title: str, author: str = "", num_characters: int = 3) -> str:
+    """Guided workflow for setting up a new audiobook project.
+
+    Generates a step-by-step prompt for creating a complete audiobook project
+    with characters, voice configurations, and chapter structure.
+    """
+    author_text = f' by "{author}"' if author else ""
+    return f"""Help me set up a new audiobook project titled "{title}"{author_text} with {num_characters} main characters.
+
+Please guide me through these steps:
+
+1. **Initialize Project**: Create the project directory and database
+2. **Create Characters**: Add {num_characters} characters with names and descriptions
+3. **Design Voices**: For each character, design a unique voice using Maya1 descriptions
+4. **Generate Voice Samples**: Create reference audio samples for voice cloning
+5. **Add Chapters**: Set up the chapter structure
+
+For each character, I'll need:
+- A distinctive name
+- A brief description of their role and personality
+- A voice description including: gender, age, accent, pitch, timbre, pacing, and tone
+- 3 sample texts (50-100 words each) that showcase their voice range
+
+Let's start by initializing the project, then work through each character one by one."""
+
+
+@mcp.prompt()
+def voice_design(character_name: str, character_description: str = "") -> str:
+    """Help designing a voice description for a character.
+
+    Generates a prompt to create a Maya1-compatible voice description
+    with all the necessary parameters.
+    """
+    desc_text = f"\n\nCharacter description: {character_description}" if character_description else ""
+    return f"""Help me design a voice for the character "{character_name}".{desc_text}
+
+I need a Maya1-compatible voice description with these parameters:
+- **Gender**: male, female, or other descriptive term
+- **Age**: 10s, 20s, 30s, 40s, 50s, 60s, 70s, or descriptive (elderly, teenage)
+- **Accent**: american, british, australian, irish, scottish, indian, or any accent
+- **Pitch**: low, medium-low, medium, medium-high, high
+- **Timbre**: warm, cold, bright, gravelly, gentle, strong, smooth, husky
+- **Pacing**: slow, measured, moderate, energetic, fast
+- **Tone**: professional, friendly, menacing, wise, enthusiastic, mysterious, warm, determined
+
+Format the final description as:
+"Realistic [gender] voice in the [age] age with [accent] accent. [Pitch] pitch, [timbre] timbre, [pacing] pacing, [tone] tone."
+
+Also suggest 3 sample texts (50-100 words each) that would:
+1. Show calm, measured speech (narration or reflection)
+2. Show emotional speech (excitement, anger, urgency) with emotion tags like <laugh>, <angry>, <whisper>
+3. Show conversational speech (casual dialogue)
+
+These samples will be used to generate reference audio for voice cloning."""
+
+
+@mcp.prompt()
+def chapter_workflow(chapter_title: str = "the current chapter") -> str:
+    """Guide for processing a chapter end-to-end.
+
+    Generates a prompt for the complete workflow from text import
+    through audio generation and stitching.
+    """
+    return f"""Help me process {chapter_title} from start to finish.
+
+**Workflow Steps:**
+
+1. **Import Text**
+   - Use `import_text_to_chapter` with screenplay-format text
+   - Format: `CHARACTER NAME: Dialogue text here.`
+   - Use NARRATOR for non-dialogue narration
+
+2. **Assign Characters**
+   - Use `detect_dialogue_in_chapter` to find unassigned segments
+   - Use `assign_dialogue_to_character` to bulk-assign by pattern
+   - Or use `modify_segment` for individual assignments
+
+3. **Review Segments**
+   - Use `get_chapter_segments` to see all segments
+   - Verify each segment has the correct character assigned
+   - Check that all characters have voice samples
+
+4. **Generate Audio**
+   - Use `generate_batch_segment_audio` with engine="chatterbox"
+   - Or use `generate_audio_for_segment` for individual control
+   - Check progress with `get_job_status` and `list_jobs`
+
+5. **Verify and Stitch**
+   - Use `get_audio_status_for_chapter` to check completion
+   - Use `stitch_chapter_audio` to combine into single file
+
+Let me know which step you'd like to start with, or if you want me to walk through the entire process."""
+
+
+# ============================================================================
 # Project Management Tools
 # ============================================================================
 
@@ -389,6 +577,13 @@ def create_character(
 
     Characters can be assigned voices and speak segments.
     """
+    # Input validation
+    if not name or not name.strip():
+        raise ValueError("Character name cannot be empty")
+    name = name.strip()
+    if len(name) > 200:
+        raise ValueError("Character name cannot exceed 200 characters")
+
     character = add_character(name, description, is_narrator)
     return {
         "success": True,
@@ -452,7 +647,7 @@ def set_character_voice(
     """Assign a voice configuration to a character.
 
     For Maya1: provider='maya1', voice_id is the voice description.
-    For Fish Speech: provider='fish_speech', voice_id can be a model ID.
+    For Chatterbox: provider='chatterbox', voice_id can be any identifier.
     """
     character = set_voice(character_id, provider, voice_id, settings)
     return {
@@ -487,6 +682,13 @@ def create_chapter(title: str, sort_order: Optional[int] = None) -> dict:
 
     Chapters contain segments of text to be narrated.
     """
+    # Input validation
+    if not title or not title.strip():
+        raise ValueError("Chapter title cannot be empty")
+    title = title.strip()
+    if len(title) > 500:
+        raise ValueError("Chapter title cannot exceed 500 characters")
+
     chapter = add_chapter(title, sort_order)
     return {
         "success": True,
@@ -550,7 +752,15 @@ def create_segment(
 
     Segments are individual pieces of narration assigned to characters.
     """
-    segment = add_segment(chapter_id, text_content, character_id, sort_order)
+    # Input validation
+    if not chapter_id or not chapter_id.strip():
+        raise ValueError("chapter_id is required")
+    if not text_content or not text_content.strip():
+        raise ValueError("text_content cannot be empty")
+    if len(text_content) > 50000:
+        raise ValueError("text_content cannot exceed 50,000 characters")
+
+    segment = add_segment(chapter_id, text_content.strip(), character_id, sort_order)
     return {"success": True, "message": "Segment added", "segment": to_dict(segment)}
 
 
@@ -610,6 +820,23 @@ def bulk_create_segments(chapter_id: str, segments: list[dict]) -> dict:
         {"text_content": "Goodbye, world!"}
     ]
     """
+    # Input validation
+    if not chapter_id or not chapter_id.strip():
+        raise ValueError("chapter_id is required")
+    if not segments:
+        raise ValueError("segments list cannot be empty")
+    if len(segments) > 1000:
+        raise ValueError("Cannot add more than 1000 segments at once")
+
+    # Validate each segment
+    for i, seg in enumerate(segments):
+        if not isinstance(seg, dict):
+            raise ValueError(f"Segment at index {i} must be a dictionary")
+        if "text_content" not in seg or not seg["text_content"]:
+            raise ValueError(f"Segment at index {i} is missing required 'text_content'")
+        if len(seg["text_content"]) > 50000:
+            raise ValueError(f"Segment at index {i} text_content exceeds 50,000 characters")
+
     result = bulk_add_segments(chapter_id, segments)
     return {
         "success": True,
@@ -838,7 +1065,6 @@ def generate_audio_for_segment(
 
     Engines:
     - chatterbox (default, recommended): Voice cloning with emotion control ([laugh], [cough], etc.)
-    - fish_speech: High-quality voice cloning (requires CUDA or cloud API)
     - maya1: Direct voice design from description (useful for one-off samples)
 
     Args:
@@ -995,6 +1221,14 @@ def import_text_to_chapter(
     Character names in the script are matched (case-insensitive) to existing
     characters in the project. Unmatched names result in unassigned segments.
     """
+    # Input validation
+    if not chapter_id or not chapter_id.strip():
+        raise ValueError("chapter_id is required")
+    if not text or not text.strip():
+        raise ValueError("text cannot be empty")
+    if len(text) > 500000:
+        raise ValueError("text cannot exceed 500,000 characters")
+
     result = import_chapter_text(chapter_id, text, default_character_id)
     return {
         "success": True,
@@ -1180,7 +1414,6 @@ def generate_batch_segment_audio(
 
     Engines:
     - chatterbox (default): Voice cloning with emotion control
-    - fish_speech: Voice cloning for CUDA or cloud API
     - maya1: Direct voice design from description
     """
     result = generate_batch_audio(segment_ids, chapter_id, engine)

@@ -82,24 +82,14 @@ pip install -e .
 # Install with Maya1 TTS support (requires CUDA GPU)
 pip install -e ".[maya1]"
 
-# Install with Fish Speech support
-pip install -e ".[fish-speech]"
+# Install with Chatterbox TTS support (voice cloning)
+pip install -e ".[chatterbox]"
 
 # Install all TTS engines
 pip install -e ".[tts]"
 
 # Install development dependencies
 pip install -e ".[dev]"
-```
-
-### Environment Variables
-
-```bash
-# Fish Speech local server (default: http://localhost:8080)
-export FISH_SPEECH_API_URL=http://localhost:8080
-
-# Fish Speech cloud API (alternative to local server)
-export FISH_AUDIO_API_KEY=your_api_key_here
 ```
 
 ## Running the Server
@@ -217,27 +207,24 @@ Maya1 creates unique voices from natural language descriptions with 20+ inline e
 - Pacing: slow, measured, moderate, energetic, fast
 - Tone: professional, conversational, enthusiastic, wise, menacing, warm, determined
 
-### Fish Speech (Voice Cloning)
+### Chatterbox (Voice Cloning)
 
-Fish Speech clones voices from reference audio samples. Supports both local server and cloud API.
+Chatterbox clones voices from reference audio samples with emotion control. Supports paralinguistic tags like [laugh], [cough], [chuckle] for expressive speech.
 
-**Local Server Setup:**
+**Installation:**
 ```bash
-# Run Fish Speech server (see Fish Speech docs)
-# Set environment variable
-export FISH_SPEECH_API_URL=http://localhost:8080
+pip install chatterbox-tts
 ```
 
-**Cloud API Setup:**
-```bash
-export FISH_AUDIO_API_KEY=your_api_key_here
-```
+**Parameters:**
+- `exaggeration`: 0.0-1.0, controls expressiveness (default 0.5)
+- `cfg_weight`: Controls pacing, lower = slower (default 0.5)
 
 ### Recommended Workflow
 
 1. **Create voice samples with Maya1**: Generate 10-30 seconds of reference audio for each character using voice descriptions
-2. **Clone voices with Fish Speech**: Use the samples to clone the voice for long-form generation
-3. **Generate segment audio**: Use Fish Speech to generate audio for all dialogue segments
+2. **Clone voices with Chatterbox**: Use the samples to clone the voice for long-form generation
+3. **Generate segment audio**: Use Chatterbox to generate audio for all dialogue segments
 4. **Stitch audiobook**: Combine all segments into chapters and the final audiobook
 
 ## Debugging

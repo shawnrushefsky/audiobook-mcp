@@ -157,6 +157,6 @@ class Segment:
 class VoiceConfig:
     """Voice configuration structure (stored as JSON in voice_config)."""
 
-    provider: str  # e.g., "maya1", "fish_speech", "elevenlabs"
-    voice_id: str  # For maya1: description, for fish_speech: model_id or description
+    provider: str  # e.g., "maya1", "chatterbox", "elevenlabs"
+    voice_id: str  # For maya1: description, for chatterbox: identifier
     settings: Optional[dict[str, Any]] = None

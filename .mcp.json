@@ -2,10 +2,7 @@
   "mcpServers": {
     "audiobook-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "audiobook-mcp"],
-      "env": {
-        "FISH_SPEECH_API_URL": "http://localhost:8080"
-      }
+      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "audiobook-mcp"]
     }
   }
 }

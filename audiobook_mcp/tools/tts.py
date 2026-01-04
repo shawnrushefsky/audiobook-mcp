@@ -96,10 +96,6 @@ EOH_ID = 128260  # End of header
 SOA_ID = 128261  # Start of audio
 TEXT_EOT_ID = 128009  # End of text
 
-# Fish Speech settings
-FISH_SPEECH_API_URL = os.environ.get("FISH_SPEECH_API_URL", "http://localhost:8080")
-FISH_AUDIO_API_KEY = os.environ.get("FISH_AUDIO_API_KEY", "")
-
 # Chatterbox TTS settings
 CHATTERBOX_DEFAULT_EXAGGERATION = 0.5
 CHATTERBOX_DEFAULT_CFG_WEIGHT = 0.5
@@ -189,8 +185,6 @@ def detect_package_manager() -> PackageManagerInfo:
 class TTSCheckResult:
     status: str  # "ok" or "error"
     maya1_available: bool = False
-    fish_speech_local_available: bool = False
-    fish_speech_cloud_available: bool = False
     chatterbox_available: bool = False
     torch_installed: bool = False
     cuda_available: bool = False
@@ -226,79 +220,6 @@ pip install torch transformers snac
 - NVIDIA GPU with CUDA: Best performance (16GB+ VRAM recommended)
 - Apple Silicon (M1/M2/M3/M4): Supported via MPS (slower but works)
 - CPU: Supported but slow (not recommended for batch generation)
-"""
-
-FISH_SPEECH_LOCAL_SETUP_INSTRUCTIONS = """
-## Fish Speech Local Server Setup (Voice Cloning)
-
-Fish Speech requires running a separate inference server. Choose one method:
-
-### Option 1: Docker (Recommended)
-
-**For NVIDIA GPU:**
-```bash
-docker run -d \\
-  --name fish-speech \\
-  --gpus all \\
-  -p 8080:8080 \\
-  fishaudio/fish-speech:latest-server-cuda
-```
-
-**For CPU only:**
-```bash
-docker run -d \\
-  --name fish-speech \\
-  -p 8080:8080 \\
-  fishaudio/fish-speech:latest-server
-```
-
-### Option 2: Manual Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/fishaudio/fish-speech.git
-cd fish-speech
-
-# Install dependencies
-pip install -e .
-
-# Download model checkpoints
-huggingface-cli download fishaudio/openaudio-s1-mini --local-dir checkpoints/openaudio-s1-mini
-
-# Start the server
-python -m tools.api_server \\
-  --listen 0.0.0.0:8080 \\
-  --llama-checkpoint-path checkpoints/openaudio-s1-mini \\
-  --decoder-checkpoint-path checkpoints/openaudio-s1-mini/codec.pth \\
-  --decoder-config-name modded_dac_vq
-```
-
-### Configuration
-
-Set the server URL (default is http://localhost:8080):
-```bash
-export FISH_SPEECH_API_URL=http://localhost:8080
-```
-"""
-
-FISH_SPEECH_CLOUD_SETUP_INSTRUCTIONS = """
-## Fish Speech Cloud API Setup (Voice Cloning)
-
-The Fish Audio cloud API is the easiest option - no local server required.
-
-### Steps:
-
-1. Create an account at https://fish.audio
-2. Get your API key from the dashboard
-3. Set the environment variable:
-
-```bash
-export FISH_AUDIO_API_KEY=your_api_key_here
-```
-
-### Pricing
-
-Fish Audio offers pay-as-you-go pricing. Check https://fish.audio for current rates.
 """
 
 CHATTERBOX_SETUP_INSTRUCTIONS = """
@@ -741,32 +662,6 @@ def check_tts() -> TTSCheckResult:
         )
         result.setup_instructions["maya1"] = MAYA1_SETUP_INSTRUCTIONS
 
-    # Check Fish Speech local server
-    fish_speech_local_error = None
-    try:
-        response = requests.get(f"{FISH_SPEECH_API_URL}/", timeout=2)
-        if response.status_code == 200:
-            result.fish_speech_local_available = True
-        else:
-            fish_speech_local_error = f"Server returned status {response.status_code}"
-    except requests.exceptions.ConnectionError:
-        fish_speech_local_error = "Connection refused - server not running"
-    except requests.exceptions.Timeout:
-        fish_speech_local_error = "Connection timeout - server not responding"
-    except Exception as e:
-        fish_speech_local_error = str(e)
-
-    if fish_speech_local_error:
-        result.warnings.append(
-            f"Fish Speech local server ({FISH_SPEECH_API_URL}): {fish_speech_local_error}"
-        )
-
-    # Check Fish Speech cloud API
-    if FISH_AUDIO_API_KEY:
-        result.fish_speech_cloud_available = True
-    else:
-        result.warnings.append("FISH_AUDIO_API_KEY environment variable not set")
-
     # Check Chatterbox TTS (voice cloning with emotion control)
     try:
         from chatterbox.tts import ChatterboxTTS  # noqa: F401
@@ -779,16 +674,9 @@ def check_tts() -> TTSCheckResult:
         )
         result.setup_instructions["chatterbox"] = CHATTERBOX_SETUP_INSTRUCTIONS
 
-    # Add setup instructions for voice cloning if no options available
-    voice_cloning_available = (
-        result.fish_speech_local_available
-        or result.fish_speech_cloud_available
-        or result.chatterbox_available
-    )
-    if not voice_cloning_available:
+    # Add setup instructions for voice cloning if Chatterbox not available
+    if not result.chatterbox_available:
         result.setup_instructions["chatterbox"] = CHATTERBOX_SETUP_INSTRUCTIONS
-        result.setup_instructions["fish_speech_local"] = FISH_SPEECH_LOCAL_SETUP_INSTRUCTIONS
-        result.setup_instructions["fish_speech_cloud"] = FISH_SPEECH_CLOUD_SETUP_INSTRUCTIONS
 
     # Check ffmpeg availability (needed for audio stitching)
     result.ffmpeg_available = shutil.which("ffmpeg") is not None
@@ -799,26 +687,20 @@ def check_tts() -> TTSCheckResult:
         )
 
     # Determine overall status
-    voice_cloning_available = (
-        result.fish_speech_local_available
-        or result.fish_speech_cloud_available
-        or result.chatterbox_available
-    )
-
-    if not result.maya1_available and not voice_cloning_available:
+    if not result.maya1_available and not result.chatterbox_available:
         result.status = "error"
         result.errors.append(
             "No TTS engines available. See setup_instructions for how to configure them."
         )
-    elif not voice_cloning_available:
+    elif not result.chatterbox_available:
         result.status = "partial"
         result.warnings.append(
-            "Only Maya1 available. Voice cloning (chatterbox/fish_speech) needed for long-form generation. See setup_instructions."
+            "Only Maya1 available. Chatterbox needed for voice cloning and long-form generation. See setup_instructions."
         )
     elif not result.maya1_available:
         result.status = "partial"
         result.warnings.append(
-            "Only voice cloning available. Maya1 needed for voice design. See setup_instructions."
+            "Only Chatterbox available. Maya1 needed for voice design. See setup_instructions."
         )
 
     return result
@@ -912,16 +794,6 @@ def list_tts_info() -> dict:
                     "cfg_weight": "Controls pacing, lower = slower (default 0.5)",
                 },
             },
-            "fish_speech": {
-                "name": "Fish Speech",
-                "description": "Voice cloning from reference audio samples",
-                "use_case": "Cloning voices for long-form generation (CUDA or cloud)",
-                "requirements": "Local server (CUDA) or FISH_AUDIO_API_KEY for cloud",
-            },
-        },
-        "configuration": {
-            "FISH_SPEECH_API_URL": FISH_SPEECH_API_URL,
-            "FISH_AUDIO_API_KEY": "***" if FISH_AUDIO_API_KEY else "(not set)",
         },
     }
 
@@ -1200,7 +1072,7 @@ def generate_with_maya1(
 
 
 # ============================================================================
-# Fish Speech TTS Engine
+# Chatterbox TTS Engine (Voice cloning with emotion control)
 # ============================================================================
 
 
@@ -1215,167 +1087,6 @@ def _get_absolute_sample_path(sample_path: str) -> str:
     # Relative path - resolve from project directory
     audio_dir = _get_project_audio_dir()
     return str(audio_dir / sample_path)
-
-
-def generate_with_fish_speech_local(
-    text: str,
-    reference_audio_paths: list[str],
-    reference_texts: list[str],
-    output_path: Path,
-) -> dict:
-    """Generate audio using local Fish Speech server with voice cloning."""
-    # Read reference audio files
-    references = []
-    for audio_path, ref_text in zip(reference_audio_paths, reference_texts):
-        abs_path = _get_absolute_sample_path(audio_path)
-
-        if abs_path.startswith("http"):
-            # Download URL to temp file
-            response = requests.get(abs_path)
-            response.raise_for_status()
-            audio_data = response.content
-        else:
-            with open(abs_path, "rb") as f:
-                audio_data = f.read()
-
-        references.append(
-            {
-                "audio": audio_data,
-                "text": ref_text or "",
-            }
-        )
-
-    # Call Fish Speech API
-    # The API expects multipart form data with references
-    files = []
-    data = {"text": text}
-
-    for i, ref in enumerate(references):
-        files.append(("references", (f"ref_{i}.wav", ref["audio"], "audio/wav")))
-        data[f"reference_text_{i}"] = ref["text"]
-
-    response = requests.post(
-        f"{FISH_SPEECH_API_URL}/v1/tts",
-        data=data,
-        files=files,
-        timeout=300,  # 5 minute timeout for long generations
-    )
-    response.raise_for_status()
-
-    # Save audio
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as f:
-        f.write(response.content)
-
-    # Get duration
-    import soundfile as sf
-
-    info = sf.info(str(output_path))
-    duration_ms = int(info.duration * 1000)
-
-    return {
-        "status": "success",
-        "output_path": str(output_path),
-        "duration_ms": duration_ms,
-        "sample_rate": info.samplerate,
-    }
-
-
-def generate_with_fish_speech_cloud(
-    text: str,
-    reference_audio_paths: list[str],
-    reference_texts: list[str],
-    output_path: Path,
-) -> dict:
-    """Generate audio using Fish Audio cloud API with voice cloning."""
-    from fish_audio_sdk import Session
-    from fish_audio_sdk.schemas import TTSRequest, ReferenceAudio
-
-    if not FISH_AUDIO_API_KEY:
-        raise ValueError("FISH_AUDIO_API_KEY environment variable not set")
-
-    session = Session(FISH_AUDIO_API_KEY)
-
-    # Prepare reference audio
-    references = []
-    for audio_path, ref_text in zip(reference_audio_paths, reference_texts):
-        abs_path = _get_absolute_sample_path(audio_path)
-
-        if abs_path.startswith("http"):
-            response = requests.get(abs_path)
-            response.raise_for_status()
-            audio_data = response.content
-        else:
-            with open(abs_path, "rb") as f:
-                audio_data = f.read()
-
-        references.append(
-            ReferenceAudio(
-                audio=audio_data,
-                text=ref_text or "",
-            )
-        )
-
-    # Generate audio
-    audio_data = b""
-    for chunk in session.tts(
-        TTSRequest(
-            text=text,
-            references=references,
-            format="wav",
-        )
-    ):
-        audio_data += chunk
-
-    # Save audio
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as f:
-        f.write(audio_data)
-
-    # Get duration
-    import soundfile as sf
-
-    info = sf.info(str(output_path))
-    duration_ms = int(info.duration * 1000)
-
-    return {
-        "status": "success",
-        "output_path": str(output_path),
-        "duration_ms": duration_ms,
-        "sample_rate": info.samplerate,
-    }
-
-
-def generate_with_fish_speech(
-    text: str,
-    reference_audio_paths: list[str],
-    reference_texts: list[str],
-    output_path: Path,
-    use_cloud: bool = False,
-) -> dict:
-    """Generate audio using Fish Speech with voice cloning.
-
-    Automatically selects local or cloud API based on availability and preference.
-    """
-    if use_cloud or FISH_AUDIO_API_KEY:
-        try:
-            return generate_with_fish_speech_cloud(
-                text, reference_audio_paths, reference_texts, output_path
-            )
-        except Exception as e:
-            if use_cloud:
-                raise
-            # Fall through to local if cloud fails and wasn't explicitly requested
-            print(f"Cloud API failed, trying local: {e}", flush=True)
-
-    return generate_with_fish_speech_local(
-        text, reference_audio_paths, reference_texts, output_path
-    )
-
-
-# ============================================================================
-# Chatterbox TTS Engine (Voice cloning with emotion control)
-# ============================================================================
 
 # Global Chatterbox model instance (loaded lazily)
 _chatterbox_model = None
@@ -1608,24 +1319,6 @@ def generate_segment_audio(
         result = generate_with_maya1(segment.text_content, voice_description, output_path)
         duration_ms = result.get("duration_ms", 0)
 
-    elif engine == "fish_speech":
-        # Get voice samples for the character
-        if not segment.character_id:
-            raise ValueError(
-                "Fish Speech requires a segment assigned to a character with voice samples"
-            )
-
-        samples = list_voice_samples(segment.character_id)
-        if not samples:
-            raise ValueError("No voice samples found for character. Generate or add samples first.")
-
-        ref_paths = [s.sample_path for s in samples]
-        ref_texts = [s.sample_text or "" for s in samples]
-
-        result = generate_with_fish_speech(segment.text_content, ref_paths, ref_texts, output_path)
-        duration_ms = result.get("duration_ms", 0)
-        voice_description = None
-
     elif engine == "chatterbox":
         # Get voice samples for the character (voice cloning with emotion control)
         if not segment.character_id:
@@ -1665,7 +1358,7 @@ def generate_segment_audio(
 
     else:
         raise ValueError(
-            f"Unknown TTS engine: {engine}. Use 'maya1', 'chatterbox', or 'fish_speech'."
+            f"Unknown TTS engine: {engine}. Use 'maya1' or 'chatterbox'."
         )
 
     # Update segment with audio path (use lock for thread safety)
@@ -1695,7 +1388,7 @@ def generate_voice_sample(
 ) -> dict:
     """Generate a voice sample for a character using Maya1.
 
-    These samples can then be used with Chatterbox, MLX-Audio, or Fish Speech for voice cloning.
+    These samples can then be used with Chatterbox for voice cloning.
     """
     audio_dir = _get_project_audio_dir()
 
@@ -1756,7 +1449,7 @@ def generate_voice_sample(
 def generate_batch_audio(
     segment_ids: Optional[list[str]] = None,
     chapter_id: Optional[str] = None,
-    engine: str = "fish_speech",
+    engine: str = "chatterbox",
 ) -> dict:
     """Generate audio for multiple segments.
 
