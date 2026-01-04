@@ -72,9 +72,10 @@ from .tools.tts import (
     generate_batch_audio,
     download_maya1_models,
     get_model_status,
-    build_voice_description,
     create_voice_candidates,
     select_voice_candidate,
+    profile_tts_memory,
+    get_calibration_status,
 )
 from .tools.import_tools import (
     import_chapter_text,
@@ -454,150 +455,180 @@ These samples will be used to generate reference audio for voice cloning."""
 
 @mcp.prompt()
 def voice_workflow() -> str:
-    """Complete voice setup and audio generation workflow.
+    """TTS engine overview and audio generation workflow.
 
-    Documents the intended two-stage TTS workflow:
-    1. Maya1 creates voice samples from descriptions
-    2. Chatterbox clones those samples for segment audio
+    Documents the two TTS engines and when to use each:
+    - Maya1: Text-prompted voice design (describe the voice you want)
+    - Chatterbox: Audio-prompted voice cloning (clone from reference audio)
     """
-    return """# Audiobook Voice Workflow
+    return """# Audiobook TTS Engines
 
-This documents the intended workflow for creating character voices and generating audio.
+Two TTS engines are available, each with different approaches to voice generation.
 
-## Overview
+## Engine Comparison
 
-The system uses a **two-stage TTS workflow**:
+| Feature | Maya1 | Chatterbox |
+|---------|-------|------------|
+| Voice Source | Text description | Reference audio |
+| Best For | Unique designed voices | Cloning existing voices |
+| Emotion Tags | `<tag>` format (17 tags) | `[tag]` format (3+ tags) |
+| Max Duration | ~48 seconds | ~40 seconds |
+| Chunk Size | 600 chars | 500 chars |
 
+---
+
+## Maya1: Text-Prompted Voice Design
+
+Maya1 creates unique voices from natural language descriptions. Describe voices like
+briefing a human voice actor—the model interprets natural language without requiring
+technical audio parameters.
+
+### Writing Voice Descriptions
+
+**Keep descriptions concise and specific.** Include:
+- Age range ("in her 40s", "elderly", "teenage")
+- Gender
+- Accent ("American", "British", "Irish")
+- Pitch ("low", "high", "medium")
+- Timbre/quality ("warm", "gravelly", "bright", "husky")
+- Character traits ("authoritative", "gentle", "menacing")
+- Delivery style ("conversational", "energetic", "measured")
+
+**Good examples:**
+- "Female host in her 30s with an American accent, energetic, clear diction"
+- "Dark villain character, male voice in his 40s with British accent, low pitch, gravelly timbre, slow pacing"
+- "Elderly woman, warm and grandmotherly, slight Irish lilt, measured pacing"
+- "Young male narrator, 20s, American, medium pitch, conversational and friendly"
+- "Gruff sea captain, 50s, weathered voice, commanding presence, slow deliberate speech"
+
+**Tips:**
+- Short, specific descriptions work better than verbose ones
+- Focus on the most distinctive qualities
+- Mention character archetypes when helpful ("pirate", "news anchor", "storyteller")
+
+### Maya1 Emotion Tags
+
+Insert tags exactly where you want emotional expression to occur. The model performs
+these expressions naturally within the generated speech.
+
+**Complete list of 17 supported tags:**
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  STAGE 1: Voice Sample Creation (Maya1)                        │
-│                                                                 │
-│  Voice Description + Sample Scripts → Reference Audio Samples  │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  STAGE 2: Audio Generation (Chatterbox)                        │
-│                                                                 │
-│  Voice Samples + Segment Text → Final Audio                    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Stage 1: Create Voice Samples with Maya1
-
-Maya1 is a **voice design** engine - it creates unique voices from natural language descriptions.
-
-### Option A: Voice Candidate Selection (Recommended)
-
-Use this when you want to try multiple voice variations and pick the best one:
-
-**Step 1: Generate Voice Candidates**
-
-Create 3-4 variations of the voice description:
-
-```
-generate_voice_candidates(
-    character_id="...",
-    sample_text="A longer piece of text (~50-100 words) that showcases the voice...",
-    voice_descriptions=[
-        "Realistic male voice in the 30s with american accent. Low pitch, warm timbre, measured pacing.",
-        "Realistic male voice in the 30s with american accent. Medium-low pitch, gravelly timbre, slow pacing.",
-        "Realistic male voice in the 40s with american accent. Low pitch, warm timbre, conversational pacing."
-    ]
-)
-```
-
-**Step 2: Listen to Candidates**
-
-Each candidate generates an audio file. Listen to each and pick your favorite.
-
-**Step 3: Select the Winner**
-
-```
-choose_voice_candidate(
-    character_id="...",
-    selected_sample_id="<sample_id of preferred voice>",
-    additional_sample_texts=[
-        "Additional sample showing emotional range...",
-        "Another sample with conversational dialogue..."
-    ]
-)
+<laugh>        <laugh_harder>   <chuckle>      <giggle>       <snort>
+<sigh>         <gasp>           <exhale>       <gulp>
+<cry>          <scream>         <angry>        <whisper>
+<excited>      <curious>        <sarcastic>    <sing>
 ```
 
-This will:
-- Delete all other candidates
-- Optionally generate 2 more samples with the selected voice
-- Result in 3 high-quality voice samples for cloning
+**Usage tips:**
+- Place tags at exact moments where expression should occur
+- Don't overload sentences with multiple tags—distribute across the text
+- Tags work best at natural pause points or sentence boundaries
 
-### Option B: Direct Sample Creation
-
-Use this when you're confident about the voice description:
-
+**Example with tags:**
 ```
-set_character_voice(
-    character_id="...",
-    provider="maya1",
-    voice_ref="Realistic female voice in the 30s age with american accent. Medium pitch, warm timbre, measured pacing, professional tone."
-)
-
-create_voice_samples(
-    character_id="...",
-    voice_description="...",
-    sample_texts=[
-        "Sample 1: Calm narration or reflection...",
-        "Sample 2: Emotional speech with <laugh> or <angry> tags...",
-        "Sample 3: Casual conversational dialogue..."
-    ]
-)
+The treasure map! <gasp> After all these years, we finally found it.
+<laugh> I can hardly believe my eyes. <whisper> But we must be careful...
+the walls have ears.
 ```
 
-## Stage 2: Generate Segment Audio with Chatterbox
+---
 
-Chatterbox is a **voice cloning** engine - it uses the Maya1-generated samples to clone the voice.
+## Chatterbox: Audio-Prompted Voice Cloning
 
-### Prerequisites
-- Character must have voice samples (from Stage 1)
-- Segment must be assigned to a character
+Chatterbox clones voices from reference audio with emotion control. It's ideal when
+you have existing audio to match or want consistent voice reproduction.
 
-### Generate Audio
+### Requirements
+- Reference audio: 10+ seconds of clear speech
+- Character must have voice samples added via `add_external_voice_sample`
+  or generated with Maya1's `generate_voice_candidates`
 
+### Chatterbox Paralinguistic Tags
+
+Native to the Turbo model—the cloned voice performs these reactions naturally:
 ```
-# Single segment
-generate_audio_for_segment(
-    segment_id="...",
-    engine="chatterbox"  # Uses voice samples for cloning
-)
-
-# Batch generation (recommended)
-generate_batch_segment_audio(
-    chapter_id="...",
-    engine="chatterbox"
-)
+[laugh]    [chuckle]    [cough]
 ```
 
-### Emotion Control in Chatterbox
+More tags may be supported. These are performed in the cloned voice with matching
+emotional tone—no post-processing needed.
 
-Add paralinguistic tags to segment text:
-- `[laugh]` - laughter
-- `[chuckle]` - light laugh
-- `[cough]` - cough
-- `[sigh]` - sigh
+**Example:**
+```
+Hi there, Sarah here from support [chuckle], have you got a minute to chat?
+```
 
-## Common Mistakes to Avoid
+### Chatterbox Parameters
 
-1. **DON'T** use Maya1 for segment audio directly - it's for sample creation only
-2. **DON'T** try to use Chatterbox without voice samples - create samples first
-3. **DON'T** forget to assign segments to characters before generating audio
+**exaggeration** (0.0 - 1.0+, default: 0.5)
+Controls speech expressiveness:
+- `0.0` = Flat, monotone delivery
+- `0.5` = Natural, conversational (default)
+- `0.7+` = Dramatic, theatrical
+- Higher values accelerate speech slightly
+
+**cfg_weight** (0.0 - 1.0, default: 0.5)
+Controls adherence to reference speaker characteristics:
+- `0.5` = Balanced (default)
+- `0.3` = Better pacing for fast-speaking references
+- Reduce when using high exaggeration to compensate for speed
+
+**Recommended combinations:**
+| Style | exaggeration | cfg_weight |
+|-------|--------------|------------|
+| Natural conversation | 0.5 | 0.5 |
+| Dramatic/emotional | 0.7 | 0.3 |
+| Calm narration | 0.4 | 0.5 |
+| Fast-speaking reference | 0.5 | 0.3 |
+
+---
+
+## Choosing an Engine
+
+**Use Maya1 when:**
+- Designing unique character voices from scratch
+- You have a clear voice concept but no reference audio
+- Creating fantasy/stylized voices (villains, creatures, etc.)
+- Rapid prototyping of voice concepts
+
+**Use Chatterbox when:**
+- Cloning a specific person's voice from samples
+- Consistency across many segments is critical
+- You have quality reference audio available
+- Fine-tuning expressiveness with exaggeration control
+
+---
 
 ## Quick Reference
 
 | Task | Tool | Engine |
 |------|------|--------|
-| Generate voice candidates | `generate_voice_candidates` | Maya1 |
-| Select preferred voice | `choose_voice_candidate` | Maya1 |
-| Set voice description | `set_character_voice` | - |
-| Create voice samples | `create_voice_samples` | Maya1 |
-| Generate segment audio | `generate_audio_for_segment` | Chatterbox |
-| Batch generate audio | `generate_batch_segment_audio` | Chatterbox |
+| Design voice from description | `generate_audio_for_segment` | maya1 |
+| Clone voice from samples | `generate_audio_for_segment` | chatterbox |
+| Batch generate chapter | `generate_batch_segment_audio` | either |
+| Add reference audio | `add_external_voice_sample` | - |
+| Compare voice variations | `generate_voice_candidates` | maya1 |
+
+---
+
+## Long Text Handling
+
+Both engines automatically chunk long texts at sentence boundaries:
+- Maya1: 600 chars max (~42s audio)
+- Chatterbox: 500 chars max (~35s audio)
+
+Chunks are concatenated with brief silence (100ms) between them.
+
+---
+
+## Automatic Tag Conversion
+
+Tags are automatically converted to the correct format for whichever engine is used:
+- `<tag>` → `[tag]` when using Chatterbox
+- `[tag]` → `<tag>` when using Maya1
+
+Write tags in either format—they'll be converted automatically. Both engines may
+support more tags than officially documented based on their training data.
 """
 
 
@@ -645,23 +676,9 @@ Let me know which step you'd like to start with, or if you want me to walk throu
 
 
 @mcp.tool()
-def get_suggested_project_path(title: str) -> dict:
-    """Get a suggested project path based on the title.
-
-    Returns a platform-appropriate path in the user's Documents folder.
-    Use this before init_audiobook_project to suggest a default location.
-    """
-    suggested_path = get_default_project_path(title)
-    return {
-        "suggested_path": suggested_path,
-        "title": title,
-    }
-
-
-@mcp.tool()
 def init_audiobook_project(
-    path: str,
     title: str,
+    path: Optional[str] = None,
     author: Optional[str] = None,
     description: Optional[str] = None,
 ) -> dict:
@@ -670,13 +687,24 @@ def init_audiobook_project(
     Creates .audiobook folder with database and directory structure.
     The directory will be created if it doesn't exist.
 
-    Tip: Use get_suggested_project_path() first to get a recommended location
-    in the user's Documents folder.
+    Args:
+        title: The project title (required).
+        path: Directory path for the project. If not provided, defaults to
+              ~/Documents/<Title-With-Dashes> (e.g., "My Story" → ~/Documents/My-Story).
+        author: Optional author name.
+        description: Optional project description.
+
+    Returns:
+        Project info including the path where it was created.
     """
+    # Use default path if not provided
+    if path is None:
+        path = get_default_project_path(title)
+
     project = init_project(path, title, author, description)
     return {
         "success": True,
-        "message": f'Project "{project.title}" initialized',
+        "message": f'Project "{project.title}" initialized at {path}',
         "project": to_dict(project),
         "path": path,
     }
@@ -1221,35 +1249,6 @@ def get_tts_info() -> dict:
 
 
 @mcp.tool()
-def create_voice_description(
-    gender: str = "female",
-    age: str = "30s",
-    accent: str = "american",
-    pitch: str = "medium",
-    timbre: str = "warm",
-    pacing: str = "measured",
-    tone: str = "professional",
-) -> dict:
-    """Build a Maya1 voice description from individual parameters.
-
-    Creates a properly formatted voice description string. Maya1 understands
-    natural language, so any descriptive terms work - the suggestions below
-    are just common values.
-
-    Suggestions (not strict - use any descriptive terms):
-    - gender: male, female (or any descriptive term)
-    - age: 10s, 20s, 30s, 40s, 50s, 60s, 70s (or "elderly", "teenage", etc.)
-    - accent: american, british, australian, irish, scottish, indian (or any accent)
-    - pitch: low, medium-low, medium, medium-high, high
-    - timbre: warm, cold, bright, gravelly, gentle, strong, smooth, husky
-    - pacing: slow, measured, moderate, energetic, fast
-    - tone: professional, friendly, menacing, wise, enthusiastic, mysterious, warm, determined, calm, excited
-    """
-    result = build_voice_description(gender, age, accent, pitch, timbre, pacing, tone)
-    return to_dict(result)
-
-
-@mcp.tool()
 def get_tts_model_status() -> dict:
     """Get the download status of TTS models (Maya1 and SNAC).
 
@@ -1273,6 +1272,40 @@ def download_tts_models(force: bool = False) -> dict:
 
 
 @mcp.tool()
+def calibrate_tts_memory(
+    engine: str = "chatterbox",
+    reference_audio_path: Optional[str] = None,
+) -> dict:
+    """Profile TTS memory usage and save calibration to the project.
+
+    Runs generation at various text lengths (100, 250, 500, 1000, 1500 chars),
+    measures peak memory usage, and computes the optimal chunk size for this
+    system. Results are saved to the project's .audiobook directory.
+
+    This calibration is used automatically when generating audio to determine
+    how to split long texts into chunks that fit in memory.
+
+    Args:
+        engine: TTS engine to profile ('maya1' or 'chatterbox')
+        reference_audio_path: Required for chatterbox - path to a voice sample
+
+    Returns:
+        Calibration results including data points and computed max_safe_chars
+    """
+    return profile_tts_memory(engine=engine, reference_audio_path=reference_audio_path)
+
+
+@mcp.tool()
+def get_tts_calibration() -> dict:
+    """Get the current TTS calibration status for the project.
+
+    Shows whether calibration has been run, and if so, the computed
+    optimal chunk sizes for each TTS engine.
+    """
+    return get_calibration_status()
+
+
+@mcp.tool()
 def generate_audio_for_segment(
     segment_id: str,
     description: Optional[str] = None,
@@ -1281,18 +1314,17 @@ def generate_audio_for_segment(
 ) -> dict:
     """Generate audio for a single segment using TTS.
 
-    Recommended workflow:
-    1. Use Maya1 to create voice samples for each character (create_voice_samples)
-    2. Use Chatterbox for all segment audio generation (this tool with engine="chatterbox")
-
     Engines:
-    - chatterbox (default, recommended): Voice cloning with emotion control ([laugh], [cough], etc.)
-    - maya1: Direct voice design from description (useful for one-off samples)
+    - chatterbox (default): Audio-prompted voice cloning. Requires character to have
+      voice samples. Supports emotion tags like [laugh], [cough], [sigh].
+    - maya1: Text-prompted voice design. Uses voice description from character's
+      voice_config or the description parameter. Supports tags like <laugh>, <sigh>.
 
     Args:
         segment_id: The segment to generate audio for.
-        description: Voice description (for maya1 engine).
-        engine: TTS engine to use.
+        description: Voice description (for maya1 engine). If not provided, uses
+                     the character's voice_config.
+        engine: TTS engine to use ('chatterbox' or 'maya1').
         run_async: If True (default), runs generation in background and returns job_id.
                    Use get_job_status to check progress. If False, blocks until complete.
 
@@ -1686,8 +1718,10 @@ def generate_batch_segment_audio(
     Either provide a list of segment_ids or a chapter_id to process all segments in a chapter.
 
     Engines:
-    - chatterbox (default): Voice cloning with emotion control
-    - maya1: Direct voice design from description
+    - chatterbox (default): Audio-prompted voice cloning from reference samples.
+      Characters must have voice samples added.
+    - maya1: Text-prompted voice design from descriptions. Uses character's
+      voice_config for the voice description.
     """
     result = generate_batch_audio(segment_ids, chapter_id, engine)
     return {

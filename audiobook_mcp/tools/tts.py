@@ -1,8 +1,12 @@
-"""Text-to-Speech tools with Maya1 and Fish Speech integration.
+"""Text-to-Speech tools with Maya1 and Chatterbox integration.
 
-This module provides TTS capabilities using:
-- Maya1: Voice design via natural language descriptions + emotion tags
-- Fish Speech: Voice cloning from reference audio samples (local or cloud API)
+This module provides TTS capabilities using two complementary engines:
+- Maya1: Text-prompted voice design (describe the voice you want)
+- Chatterbox: Audio-prompted voice cloning (clone from reference audio)
+
+Both engines can be used for segment generation. Choose based on your use case:
+- Maya1 when you want to design unique voices from descriptions
+- Chatterbox when you have reference audio to clone
 """
 
 import json
@@ -23,64 +27,39 @@ from .voice_samples import add_voice_sample, list_voice_samples
 # Voice Presets and Constants
 # ============================================================================
 
-EMOTION_TAGS = [
+# Maya1 emotion tags (complete list from maya-research/maya1)
+# These are inserted inline as <tag> in text
+MAYA1_EMOTION_TAGS = [
     "laugh",
     "laugh_harder",
     "chuckle",
     "giggle",
     "snort",
-    "cry",
-    "sob",
     "sigh",
     "gasp",
-    "groan",
-    "whisper",
-    "angry",
-    "yell",
+    "exhale",
+    "gulp",
+    "cry",
     "scream",
-    "cough",
-    "clear_throat",
-    "sniff",
-    "hum",
-    "mumble",
-    "stutter",
-]
-
-VOICE_PRESETS = {
-    "narrator_male": "Realistic male voice in the 40s age with american accent. Low pitch, warm timbre, measured pacing, professional tone.",
-    "narrator_female": "Realistic female voice in the 30s age with american accent. Medium pitch, warm timbre, measured pacing, professional tone.",
-    "young_male": "Realistic male voice in the 20s age with american accent. Medium-high pitch, bright timbre, energetic pacing, enthusiastic tone.",
-    "young_female": "Realistic female voice in the 20s age with american accent. High pitch, bright timbre, energetic pacing, enthusiastic tone.",
-    "old_male": "Realistic male voice in the 60s age with american accent. Low pitch, gravelly timbre, slow pacing, wise tone.",
-    "old_female": "Realistic female voice in the 60s age with american accent. Medium pitch, gentle timbre, measured pacing, warm tone.",
-    "child_male": "Realistic male voice in the 10s age with american accent. High pitch, bright timbre, fast pacing, excited tone.",
-    "child_female": "Realistic female voice in the 10s age with american accent. High pitch, bright timbre, fast pacing, excited tone.",
-    "villain": "Realistic male voice in the 40s age with british accent. Low pitch, cold timbre, slow pacing, menacing tone.",
-    "hero": "Realistic male voice in the 30s age with american accent. Medium-low pitch, strong timbre, confident pacing, determined tone.",
-    "mysterious": "Realistic voice in the 30s age. Low pitch, hushed timbre, slow pacing, enigmatic tone.",
-}
-
-# Voice description options for the builder
-VOICE_GENDERS = ["male", "female"]
-VOICE_AGES = ["10s", "20s", "30s", "40s", "50s", "60s", "70s"]
-VOICE_ACCENTS = ["american", "british", "australian", "irish", "scottish", "indian"]
-VOICE_PITCHES = ["low", "medium-low", "medium", "medium-high", "high"]
-VOICE_TIMBRES = ["warm", "cold", "bright", "gravelly", "gentle", "strong", "smooth", "husky"]
-VOICE_PACINGS = ["slow", "measured", "moderate", "energetic", "fast"]
-VOICE_TONES = [
-    "professional",
-    "friendly",
-    "menacing",
-    "wise",
-    "enthusiastic",
-    "mysterious",
-    "warm",
-    "determined",
-    "calm",
+    "angry",
+    "whisper",
     "excited",
+    "curious",
+    "sarcastic",
+    "sing",
 ]
 
-DEFAULT_DESCRIPTION = VOICE_PRESETS["narrator_female"]
+# Chatterbox paralinguistic tags (inserted as [tag] in text)
+# Documentation mentions "and more" - additional tags may work
+CHATTERBOX_TAGS = [
+    "laugh",
+    "chuckle",
+    "cough",
+]
+
+
+# Default voice description for Maya1 when none specified
+DEFAULT_DESCRIPTION = "Female narrator in her 30s with American accent, warm timbre, measured pacing"
 SAMPLE_RATE = 24000
 
 # Maya1 SNAC token format constants
@@ -95,21 +74,65 @@ EOH_ID = 128260  # End of header
 SOA_ID = 128261  # Start of audio
 TEXT_EOT_ID = 128009  # End of text
 
-# Chatterbox TTS settings
+# Chatterbox TTS settings (audio-prompted voice cloning)
 CHATTERBOX_DEFAULT_EXAGGERATION = 0.5
 CHATTERBOX_DEFAULT_CFG_WEIGHT = 0.5
 CHATTERBOX_MAX_DURATION_SECS = 40  # Model has ~40 second max duration
+CHATTERBOX_MAX_CHUNK_CHARS = 500  # ~35s of audio at ~14 chars/sec, stays under 40s limit
 
-# Chunking settings based on VRAM/RAM availability
-# Characters per chunk for different memory tiers
-CHUNK_SIZE_LOW_VRAM = 200  # For systems with < 8GB VRAM
-CHUNK_SIZE_MEDIUM_VRAM = 500  # For systems with 8-16GB VRAM
-CHUNK_SIZE_HIGH_VRAM = 1000  # For systems with 16-32GB VRAM
-CHUNK_SIZE_VERY_HIGH_VRAM = 2000  # For systems with 32GB+ VRAM
+# Maya1 TTS settings (text-prompted voice design)
+MAYA1_MAX_TOKENS = 4096  # Max tokens for generation
+MAYA1_MAX_DURATION_SECS = 48  # ~4096 tokens / 7 per frame / 12 Hz
+MAYA1_MAX_CHUNK_CHARS = 600  # ~42s of audio at ~14 chars/sec, stays under 48s limit
+
+# Calibration settings (mostly for profiling, not critical since duration is the real limit)
+CALIBRATION_FILENAME = "tts_calibration.json"
+CALIBRATION_TEST_LENGTHS = [100, 250, 500]  # Shorter tests since duration is the limit
 
 # Model identifiers for downloading
 MAYA1_MODEL_ID = "maya-research/maya1"
 SNAC_MODEL_ID = "hubertsiuzdak/snac_24khz"
+
+
+# ============================================================================
+# Emotion Tag Conversion
+# ============================================================================
+
+
+def _convert_maya1_to_chatterbox_tags(text: str) -> str:
+    """Convert Maya1 emotion tags <tag> to Chatterbox format [tag].
+
+    Maya1 uses: <laugh>, <sigh>, <angry>, etc.
+    Chatterbox uses: [laugh], [sigh], [angry], etc.
+
+    Converts any <word> or <word_word> pattern to [word] format.
+    Both engines may support more tags than explicitly documented.
+    """
+    import re
+
+    # Convert any <tag> to [tag] - matches word characters and underscores
+    # e.g., <laugh>, <laugh_harder>, <my_custom_tag>
+    pattern = r"<(\w+)>"
+    replacement = r"[\1]"
+    return re.sub(pattern, replacement, text)
+
+
+def _convert_chatterbox_to_maya1_tags(text: str) -> str:
+    """Convert Chatterbox emotion tags [tag] to Maya1 format <tag>.
+
+    Chatterbox uses: [laugh], [sigh], [angry], etc.
+    Maya1 uses: <laugh>, <sigh>, <angry>, etc.
+
+    Converts any [word] or [word_word] pattern to <word> format.
+    Both engines may support more tags than explicitly documented.
+    """
+    import re
+
+    # Convert any [tag] to <tag> - matches word characters and underscores
+    # e.g., [laugh], [laugh_harder], [my_custom_tag]
+    pattern = r"\[(\w+)\]"
+    replacement = r"<\1>"
+    return re.sub(pattern, replacement, text)
 
 
 # ============================================================================
@@ -524,28 +547,26 @@ def _get_available_memory_gb() -> tuple[float, str]:
     return (system_mem, "cpu")
 
 
-def _get_optimal_chunk_size() -> int:
-    """Determine optimal chunk size (in characters) based on available memory.
+def _get_optimal_chunk_size(engine: str = "chatterbox") -> int:
+    """Determine optimal chunk size (in characters) based on engine limits.
 
-    Returns recommended max characters per chunk.
+    Both engines have maximum output duration limits that determine chunk size:
+    - Chatterbox: 40s max → ~500 chars
+    - Maya1: 48s max → ~600 chars
+
+    Args:
+        engine: TTS engine to get chunk size for ('maya1' or 'chatterbox')
+
+    Returns:
+        Recommended max characters per chunk.
     """
-    memory_gb, memory_type = _get_available_memory_gb()
-
-    if memory_gb >= 64:
-        # Very high memory (64GB+ unified or VRAM) - can handle large chunks
-        return CHUNK_SIZE_VERY_HIGH_VRAM
-    elif memory_gb >= 32:
-        # High memory (32GB+)
-        return CHUNK_SIZE_VERY_HIGH_VRAM
-    elif memory_gb >= 16:
-        # Good memory (16-32GB)
-        return CHUNK_SIZE_HIGH_VRAM
-    elif memory_gb >= 8:
-        # Medium memory (8-16GB)
-        return CHUNK_SIZE_MEDIUM_VRAM
+    if engine == "chatterbox":
+        return CHATTERBOX_MAX_CHUNK_CHARS
+    elif engine == "maya1":
+        return MAYA1_MAX_CHUNK_CHARS
     else:
-        # Low memory (< 8GB)
-        return CHUNK_SIZE_LOW_VRAM
+        # Unknown engine, use conservative default
+        return CHATTERBOX_MAX_CHUNK_CHARS
 
 
 def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
@@ -606,6 +627,391 @@ def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
         chunks.append(current_chunk.strip())
 
     return chunks
+
+
+# ============================================================================
+# Memory Profiling and Calibration
+# ============================================================================
+
+
+@dataclass
+class CalibrationDataPoint:
+    """A single calibration measurement."""
+
+    chars: int
+    peak_memory_mb: float
+    duration_ms: int
+    generation_time_secs: float
+
+
+@dataclass
+class EngineCalibration:
+    """Calibration data for a TTS engine."""
+
+    engine: str
+    device: str
+    memory_gb: float
+    data_points: list[CalibrationDataPoint]
+    max_safe_chars: int  # Computed optimal max chars
+    calibrated_at: str
+
+
+@dataclass
+class ProjectCalibration:
+    """Full calibration data for a project."""
+
+    maya1: Optional[EngineCalibration] = None
+    chatterbox: Optional[EngineCalibration] = None
+
+
+def _get_peak_memory_mb() -> float:
+    """Get peak GPU/system memory usage in MB.
+
+    For CUDA: Returns max_memory_allocated
+    For MPS: Returns driver_allocated_size
+    For CPU: Returns process RSS
+    """
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return torch.cuda.max_memory_allocated() / (1024 * 1024)
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            # MPS memory tracking
+            try:
+                return torch.mps.driver_allocated_size() / (1024 * 1024)
+            except AttributeError:
+                pass
+    except ImportError:
+        pass
+
+    # Fallback to process memory for CPU
+    try:
+        import psutil
+
+        process = psutil.Process()
+        return process.memory_info().rss / (1024 * 1024)
+    except ImportError:
+        return 0.0
+
+
+def _reset_peak_memory():
+    """Reset peak memory tracking."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.empty_cache()
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            # MPS doesn't have reset, but we can empty cache
+            try:
+                torch.mps.empty_cache()
+            except AttributeError:
+                pass
+    except ImportError:
+        pass
+
+
+def _load_calibration() -> Optional[ProjectCalibration]:
+    """Load calibration data from the current project."""
+    project_path = get_current_project_path()
+    if not project_path:
+        return None
+
+    calibration_file = Path(project_path) / ".audiobook" / CALIBRATION_FILENAME
+    if not calibration_file.exists():
+        return None
+
+    try:
+        with open(calibration_file, "r") as f:
+            data = json.load(f)
+
+        calibration = ProjectCalibration()
+
+        for engine in ["maya1", "chatterbox"]:
+            if engine in data and data[engine]:
+                engine_data = data[engine]
+                data_points = [
+                    CalibrationDataPoint(**dp) for dp in engine_data.get("data_points", [])
+                ]
+                engine_cal = EngineCalibration(
+                    engine=engine_data["engine"],
+                    device=engine_data["device"],
+                    memory_gb=engine_data["memory_gb"],
+                    data_points=data_points,
+                    max_safe_chars=engine_data["max_safe_chars"],
+                    calibrated_at=engine_data["calibrated_at"],
+                )
+                setattr(calibration, engine, engine_cal)
+
+        return calibration
+    except Exception:
+        return None
+
+
+def _save_calibration(calibration: ProjectCalibration):
+    """Save calibration data to the current project."""
+    project_path = get_current_project_path()
+    if not project_path:
+        raise ValueError("No project open - cannot save calibration")
+
+    calibration_file = Path(project_path) / ".audiobook" / CALIBRATION_FILENAME
+
+    data = {}
+    for engine in ["maya1", "chatterbox"]:
+        engine_cal = getattr(calibration, engine)
+        if engine_cal:
+            data[engine] = {
+                "engine": engine_cal.engine,
+                "device": engine_cal.device,
+                "memory_gb": engine_cal.memory_gb,
+                "data_points": [
+                    {
+                        "chars": dp.chars,
+                        "peak_memory_mb": dp.peak_memory_mb,
+                        "duration_ms": dp.duration_ms,
+                        "generation_time_secs": dp.generation_time_secs,
+                    }
+                    for dp in engine_cal.data_points
+                ],
+                "max_safe_chars": engine_cal.max_safe_chars,
+                "calibrated_at": engine_cal.calibrated_at,
+            }
+
+    with open(calibration_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _compute_max_safe_chars(
+    data_points: list[CalibrationDataPoint], available_memory_mb: float
+) -> int:
+    """Compute maximum safe character count from calibration data.
+
+    Uses linear regression on memory vs chars, then finds the char count
+    that would use MEMORY_SAFETY_MARGIN of available memory.
+    """
+    if not data_points or len(data_points) < 2:
+        return CHATTERBOX_MAX_CHUNK_CHARS  # Fallback to conservative default
+
+    # Simple linear regression: memory = a * chars + b
+    n = len(data_points)
+    sum_x = sum(dp.chars for dp in data_points)
+    sum_y = sum(dp.peak_memory_mb for dp in data_points)
+    sum_xy = sum(dp.chars * dp.peak_memory_mb for dp in data_points)
+    sum_x2 = sum(dp.chars * dp.chars for dp in data_points)
+
+    # Avoid division by zero
+    denom = n * sum_x2 - sum_x * sum_x
+    if abs(denom) < 1e-10:
+        return CHATTERBOX_MAX_CHUNK_CHARS  # Fallback to conservative default
+
+    a = (n * sum_xy - sum_x * sum_y) / denom  # slope (MB per char)
+    b = (sum_y - a * sum_x) / n  # intercept (baseline MB)
+
+    # Target memory = 80% of available (safety margin)
+    target_memory = 0.80 * available_memory_mb
+
+    # Solve: target = a * chars + b → chars = (target - b) / a
+    if a <= 0:
+        # Memory doesn't increase with chars (unlikely) - use max tested
+        return max(dp.chars for dp in data_points)
+
+    max_chars = int((target_memory - b) / a)
+
+    # Clamp to reasonable range
+    min_tested = min(dp.chars for dp in data_points)
+    max_tested = max(dp.chars for dp in data_points)
+
+    # Don't extrapolate too far beyond tested range
+    return max(min_tested, min(max_chars, max_tested * 2))
+
+
+def _get_calibrated_chunk_size(engine: str = "chatterbox") -> Optional[int]:
+    """Get chunk size from calibration if available."""
+    calibration = _load_calibration()
+    if not calibration:
+        return None
+
+    engine_cal = getattr(calibration, engine, None)
+    if not engine_cal:
+        return None
+
+    return engine_cal.max_safe_chars
+
+
+def profile_tts_memory(
+    engine: str = "chatterbox",
+    test_lengths: Optional[list[int]] = None,
+    voice_description: Optional[str] = None,
+    reference_audio_path: Optional[str] = None,
+) -> dict:
+    """Profile TTS memory usage and save calibration to the project.
+
+    Runs generation at various text lengths, measures peak memory,
+    and computes optimal chunk size for this system.
+
+    Args:
+        engine: TTS engine to profile ('maya1' or 'chatterbox')
+        test_lengths: List of character counts to test (default: CALIBRATION_TEST_LENGTHS)
+        voice_description: Voice description for Maya1 (uses default if not provided)
+        reference_audio_path: Reference audio for Chatterbox (required for chatterbox)
+
+    Returns:
+        Calibration results including data points and computed max_safe_chars
+    """
+    import time
+    import tempfile
+    from datetime import datetime
+
+    if test_lengths is None:
+        test_lengths = CALIBRATION_TEST_LENGTHS
+
+    device, device_name, vram_gb = _get_best_device()
+    memory_gb, memory_type = _get_available_memory_gb()
+
+    # Generate test text of various lengths
+    base_text = (
+        "The quick brown fox jumps over the lazy dog. "
+        "This is a sample text used for calibration purposes. "
+        "It contains multiple sentences to ensure natural speech patterns. "
+    )
+
+    data_points = []
+
+    print(f"Profiling {engine} TTS on {device_name or device}...", file=sys.stderr, flush=True)
+    print(f"Available memory: {memory_gb}GB ({memory_type})", file=sys.stderr, flush=True)
+
+    for target_chars in sorted(test_lengths):
+        # Generate text of approximately target length
+        repeats = max(1, target_chars // len(base_text) + 1)
+        test_text = (base_text * repeats)[:target_chars]
+
+        print(f"  Testing {len(test_text)} chars...", file=sys.stderr, flush=True)
+
+        # Reset memory tracking
+        _reset_peak_memory()
+
+        # Create temp output file
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            output_path = Path(f.name)
+
+        try:
+            start_time = time.time()
+
+            if engine == "maya1":
+                desc = voice_description or DEFAULT_DESCRIPTION
+                result = generate_with_maya1(test_text, desc, output_path)
+            elif engine == "chatterbox":
+                if not reference_audio_path:
+                    raise ValueError("reference_audio_path required for chatterbox profiling")
+                result = generate_with_chatterbox(
+                    test_text,
+                    [reference_audio_path],
+                    [""],
+                    output_path,
+                )
+            else:
+                raise ValueError(f"Unknown engine: {engine}")
+
+            gen_time = time.time() - start_time
+            peak_memory = _get_peak_memory_mb()
+            duration_ms = result.get("duration_ms", 0)
+
+            data_points.append(
+                CalibrationDataPoint(
+                    chars=len(test_text),
+                    peak_memory_mb=round(peak_memory, 2),
+                    duration_ms=duration_ms,
+                    generation_time_secs=round(gen_time, 2),
+                )
+            )
+
+            print(
+                f"    → {duration_ms}ms audio, {peak_memory:.0f}MB peak, {gen_time:.1f}s",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        except Exception as e:
+            print(f"    → Failed: {e}", file=sys.stderr, flush=True)
+        finally:
+            # Clean up temp file
+            if output_path.exists():
+                output_path.unlink()
+
+    if not data_points:
+        raise ValueError("All calibration tests failed")
+
+    # Compute optimal chunk size
+    available_mb = memory_gb * 1024
+    max_safe_chars = _compute_max_safe_chars(data_points, available_mb)
+
+    print(f"Calibration complete. Max safe chars: {max_safe_chars}", file=sys.stderr, flush=True)
+
+    # Create engine calibration
+    engine_cal = EngineCalibration(
+        engine=engine,
+        device=device,
+        memory_gb=memory_gb,
+        data_points=data_points,
+        max_safe_chars=max_safe_chars,
+        calibrated_at=datetime.utcnow().isoformat() + "Z",
+    )
+
+    # Load existing calibration or create new
+    calibration = _load_calibration() or ProjectCalibration()
+    setattr(calibration, engine, engine_cal)
+
+    # Save calibration
+    _save_calibration(calibration)
+
+    return {
+        "engine": engine,
+        "device": device,
+        "memory_gb": memory_gb,
+        "memory_type": memory_type,
+        "data_points": [
+            {
+                "chars": dp.chars,
+                "peak_memory_mb": dp.peak_memory_mb,
+                "duration_ms": dp.duration_ms,
+                "generation_time_secs": dp.generation_time_secs,
+            }
+            for dp in data_points
+        ],
+        "max_safe_chars": max_safe_chars,
+        "calibrated_at": engine_cal.calibrated_at,
+    }
+
+
+def get_calibration_status() -> dict:
+    """Get the current calibration status for the project."""
+    calibration = _load_calibration()
+
+    if not calibration:
+        return {
+            "calibrated": False,
+            "maya1": None,
+            "chatterbox": None,
+        }
+
+    result = {"calibrated": True}
+
+    for engine in ["maya1", "chatterbox"]:
+        engine_cal = getattr(calibration, engine)
+        if engine_cal:
+            result[engine] = {
+                "device": engine_cal.device,
+                "memory_gb": engine_cal.memory_gb,
+                "max_safe_chars": engine_cal.max_safe_chars,
+                "data_points_count": len(engine_cal.data_points),
+                "calibrated_at": engine_cal.calibrated_at,
+            }
+        else:
+            result[engine] = None
+
+    return result
 
 
 def check_tts() -> TTSCheckResult:
@@ -708,178 +1114,104 @@ def check_tts() -> TTSCheckResult:
 def list_tts_info() -> dict:
     """List available TTS engines, emotion tags, and voice presets."""
     return {
-        "emotion_tags": EMOTION_TAGS,
-        "emotion_usage": {
-            "description": "Maya1 supports 20+ inline emotion tags. Insert them where you want emotional expression.",
-            "supported": EMOTION_TAGS,
-            "examples": [
-                "I can't believe it! <laugh>",
-                "<whisper> Don't tell anyone...",
-                "NO! <angry> I won't do it!",
-                "Our new update <laugh> finally ships with the feature you asked for.",
-                "<sigh> I suppose we should get started.",
-            ],
-        },
-        "voice_presets": VOICE_PRESETS,
-        "description_format": {
-            "description": "Maya1 understands natural language voice descriptions. Describe voices like briefing a voice actor.",
-            "template": "Realistic {gender} voice in the {age} age with {accent} accent. {pitch} pitch, {timbre} timbre, {pacing} pacing, {tone} tone.",
-            "examples": [
-                "Female, in her 30s with an American accent and is an event host, energetic, clear diction",
-                "Dark villain character, Male voice in their 40s with a British accent. low pitch, gravelly timbre, slow pacing, angry tone at high intensity.",
-                "Realistic male voice in the 30s age with american accent. Normal pitch, warm timbre, conversational pacing.",
-                "40-year-old, warm, low pitch, conversational",
-                "Young enthusiastic female narrator with a bright, energetic delivery",
-            ],
-            "parameters": {
-                "age": {
-                    "suggestions": VOICE_AGES,
-                    "examples": ["30s", "40-year-old", "late 20s", "elderly"],
-                },
-                "gender": {
-                    "suggestions": VOICE_GENDERS,
-                    "examples": ["male", "female", "gender-neutral"],
-                },
-                "accent": {
-                    "suggestions": VOICE_ACCENTS,
-                    "examples": ["American accent", "British accent", "Middle Eastern accent"],
-                },
-                "pitch": {
-                    "suggestions": VOICE_PITCHES,
-                    "examples": ["low pitch", "high pitch", "normal pitch"],
-                },
-                "timbre": {
-                    "suggestions": VOICE_TIMBRES,
-                    "examples": ["warm baritone", "gravelly", "clear diction", "bright"],
-                },
-                "pacing": {
-                    "suggestions": VOICE_PACINGS,
-                    "examples": ["conversational pacing", "slow pacing", "fast pacing"],
-                },
-                "tone": {
-                    "suggestions": VOICE_TONES,
-                    "examples": ["energetic", "calm", "menacing", "professional"],
-                },
-            },
-        },
         "engines": {
             "maya1": {
                 "name": "Maya1",
-                "description": "Voice design via natural language descriptions with 20+ emotion tags",
-                "use_case": "Creating unique voices from text descriptions",
-                "requirements": "torch, transformers, snac",
-                "capabilities": [
-                    "Natural language voice descriptions",
-                    "20+ inline emotion tags (laugh, whisper, angry, etc.)",
-                    "Character voices (villain, narrator, etc.)",
-                    "Accent and dialect support",
-                ],
+                "type": "Text-prompted voice design",
+                "description": "Creates unique voices from natural language descriptions",
+                "requirements": "torch, transformers, snac (~8GB VRAM)",
+                "max_duration": "~48 seconds per generation",
+                "chunk_size": 600,
+                "emotion_tags": {
+                    "format": "<tag>",
+                    "supported": MAYA1_EMOTION_TAGS,
+                    "examples": [
+                        "The treasure! <gasp> After all these years!",
+                        "<whisper> Don't tell anyone about this...",
+                        "NO! <angry> I won't do it!",
+                        "<laugh> I can hardly believe it worked!",
+                    ],
+                    "tips": [
+                        "Place tags at exact moments where expression should occur",
+                        "Don't overload sentences—distribute tags across text",
+                        "Tags work best at natural pause points",
+                    ],
+                },
+                "voice_descriptions": {
+                    "guidance": "Describe voices like briefing a voice actor. Keep descriptions concise and specific.",
+                    "include": [
+                        "Age range (in her 40s, elderly, teenage)",
+                        "Gender",
+                        "Accent (American, British, Irish)",
+                        "Pitch (low, high, medium)",
+                        "Timbre (warm, gravelly, bright, husky)",
+                        "Character traits (authoritative, gentle, menacing)",
+                        "Delivery style (conversational, energetic, measured)",
+                    ],
+                    "examples": [
+                        "Female host in her 30s with American accent, energetic, clear diction",
+                        "Dark villain, male, 40s, British accent, low pitch, gravelly, slow pacing",
+                        "Elderly woman, warm and grandmotherly, slight Irish lilt, measured pacing",
+                        "Gruff sea captain, 50s, weathered voice, commanding, slow deliberate speech",
+                    ],
+                    "tips": [
+                        "Short, specific descriptions work better than verbose ones",
+                        "Focus on the most distinctive qualities",
+                        "Mention character archetypes when helpful (pirate, news anchor)",
+                    ],
+                },
             },
             "chatterbox": {
                 "name": "Chatterbox TTS",
-                "description": "Voice cloning with emotion control and paralinguistic tags",
-                "use_case": "Expressive voice cloning with emotion control",
+                "type": "Audio-prompted voice cloning",
+                "description": "Clones voices from reference audio with emotion control",
                 "requirements": "chatterbox-tts (pip install chatterbox-tts)",
-                "capabilities": [
-                    "Zero-shot voice cloning from reference audio",
-                    "Paralinguistic tags: [laugh], [cough], [chuckle], [sigh]",
-                    "Exaggeration control for expressiveness",
-                    "cfg_weight for pacing control",
-                    "23+ language support (multilingual model)",
-                    "CUDA, MPS, and CPU support",
-                ],
+                "max_duration": "~40 seconds per generation",
+                "chunk_size": 500,
+                "reference_audio": "10+ seconds of clear speech recommended",
+                "paralinguistic_tags": {
+                    "format": "[tag]",
+                    "documented": CHATTERBOX_TAGS,
+                    "note": "Documentation mentions 'and more' - additional tags may be supported",
+                    "examples": [
+                        "Hi there [chuckle], have you got a minute?",
+                        "That's hilarious! [laugh] I love it.",
+                        "Sorry [cough] excuse me, where was I?",
+                    ],
+                    "tips": [
+                        "Tags are performed in the cloned voice naturally",
+                        "No post-processing needed for tag expressions",
+                    ],
+                },
                 "parameters": {
-                    "exaggeration": "0.0-1.0, controls expressiveness (default 0.5)",
-                    "cfg_weight": "Controls pacing, lower = slower (default 0.5)",
+                    "exaggeration": {
+                        "range": "0.0 - 1.0+",
+                        "default": 0.5,
+                        "description": "Controls speech expressiveness",
+                        "values": {
+                            "0.0": "Flat, monotone",
+                            "0.5": "Natural, conversational",
+                            "0.7+": "Dramatic, theatrical (may accelerate speech)",
+                        },
+                    },
+                    "cfg_weight": {
+                        "range": "0.0 - 1.0",
+                        "default": 0.5,
+                        "description": "Controls adherence to reference speaker",
+                        "values": {
+                            "0.5": "Balanced (default)",
+                            "0.3": "Better for fast-speaking references or dramatic delivery",
+                        },
+                    },
+                    "recommended_combinations": [
+                        {"style": "Natural conversation", "exaggeration": 0.5, "cfg_weight": 0.5},
+                        {"style": "Dramatic/emotional", "exaggeration": 0.7, "cfg_weight": 0.3},
+                        {"style": "Calm narration", "exaggeration": 0.4, "cfg_weight": 0.5},
+                    ],
                 },
             },
         },
     }
-
-
-@dataclass
-class VoiceDescriptionResult:
-    """Result of building a voice description."""
-
-    description: str
-    gender: str
-    age: str
-    accent: str
-    pitch: str
-    timbre: str
-    pacing: str
-    tone: str
-    warnings: list = field(default_factory=list)
-
-
-def build_voice_description(
-    gender: str = "female",
-    age: str = "30s",
-    accent: str = "american",
-    pitch: str = "medium",
-    timbre: str = "warm",
-    pacing: str = "measured",
-    tone: str = "professional",
-) -> VoiceDescriptionResult:
-    """Build a Maya1 voice description from individual parameters.
-
-    Constructs a description string in the recommended format. Parameters
-    are suggestions - Maya1 can understand any descriptive language, so
-    custom values will work too.
-
-    Args:
-        gender: Voice gender (suggestions: male, female, or any descriptive term)
-        age: Age range (suggestions: 10s, 20s, 30s, 40s, 50s, 60s, 70s, or descriptive like "elderly", "teenage")
-        accent: Accent type (suggestions: american, british, australian, irish, scottish, indian, or any accent)
-        pitch: Voice pitch (suggestions: low, medium-low, medium, medium-high, high, or descriptive)
-        timbre: Voice timbre (suggestions: warm, cold, bright, gravelly, gentle, strong, smooth, husky, or descriptive)
-        pacing: Speech pacing (suggestions: slow, measured, moderate, energetic, fast, or descriptive)
-        tone: Voice tone (suggestions: professional, friendly, menacing, wise, enthusiastic, mysterious, or descriptive)
-
-    Returns:
-        VoiceDescriptionResult with the constructed description and all parameters.
-    """
-    warnings = []
-
-    # Provide gentle suggestions for non-standard values (but don't error)
-    if gender.lower() not in VOICE_GENDERS:
-        warnings.append(f"Custom gender '{gender}' used. Common values: {VOICE_GENDERS}")
-
-    if age.lower() not in VOICE_AGES:
-        warnings.append(f"Custom age '{age}' used. Common values: {VOICE_AGES}")
-
-    if accent.lower() not in VOICE_ACCENTS:
-        warnings.append(f"Custom accent '{accent}' used. Common values: {VOICE_ACCENTS}")
-
-    if pitch.lower() not in VOICE_PITCHES:
-        warnings.append(f"Custom pitch '{pitch}' used. Common values: {VOICE_PITCHES}")
-
-    if timbre.lower() not in VOICE_TIMBRES:
-        warnings.append(f"Custom timbre '{timbre}' used. Common values: {VOICE_TIMBRES}")
-
-    if pacing.lower() not in VOICE_PACINGS:
-        warnings.append(f"Custom pacing '{pacing}' used. Common values: {VOICE_PACINGS}")
-
-    if tone.lower() not in VOICE_TONES:
-        warnings.append(f"Custom tone '{tone}' used. Common values: {VOICE_TONES}")
-
-    # Build description
-    description = (
-        f"Realistic {gender} voice in the {age} age with {accent} accent. "
-        f"{pitch.capitalize()} pitch, {timbre} timbre, {pacing} pacing, {tone} tone."
-    )
-
-    return VoiceDescriptionResult(
-        description=description,
-        gender=gender,
-        age=age,
-        accent=accent,
-        pitch=pitch,
-        timbre=timbre,
-        pacing=pacing,
-        tone=tone,
-        warnings=warnings,
-    )
 
 
 # ============================================================================
@@ -1000,17 +1332,19 @@ def _build_maya1_prompt(tokenizer, description: str, text: str) -> str:
     return prompt
 
 
-def generate_with_maya1(
+def _generate_maya1_chunk(
     text: str,
     description: str,
-    output_path: Path,
-) -> dict:
-    """Generate audio using Maya1 TTS."""
-    import torch
-    import soundfile as sf
+    model,
+    tokenizer,
+    snac_model,
+    device,
+):
+    """Generate a single chunk of audio with Maya1.
 
-    model, tokenizer, snac_model = _load_maya1()
-    device = next(model.parameters()).device
+    Returns raw audio numpy array (not saved to file).
+    """
+    import torch
 
     # Build prompt using correct Maya1 format
     prompt = _build_maya1_prompt(tokenizer, description, text)
@@ -1021,7 +1355,7 @@ def generate_with_maya1(
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=4096,  # Allow longer generations
+            max_new_tokens=MAYA1_MAX_TOKENS,
             min_new_tokens=28,  # At least 4 SNAC frames
             do_sample=True,
             temperature=0.4,  # Lower temperature for more stable output
@@ -1056,6 +1390,79 @@ def generate_with_maya1(
     if len(audio_np) > 2048:
         audio_np = audio_np[2048:]
 
+    return audio_np
+
+
+def generate_with_maya1(
+    text: str,
+    description: str,
+    output_path: Path,
+) -> dict:
+    """Generate audio using Maya1 TTS (text-prompted voice design).
+
+    For long texts, automatically splits into chunks based on the model's
+    ~48 second maximum output duration and concatenates the results.
+
+    Args:
+        text: The text to synthesize. Can include emotion tags like <laugh>, <sigh>.
+        description: Voice description (e.g., "Realistic female voice in the 30s...").
+        output_path: Where to save the generated audio.
+
+    Returns:
+        Dict with status, output_path, duration_ms, and sample_rate.
+    """
+    import numpy as np
+    import soundfile as sf
+
+    model, tokenizer, snac_model = _load_maya1()
+    device = next(model.parameters()).device
+
+    # Convert any Chatterbox-style emotion tags to Maya1 format
+    # Chatterbox: [laugh], [sigh] → Maya1: <laugh>, <sigh>
+    text = _convert_chatterbox_to_maya1_tags(text)
+
+    # Determine optimal chunk size
+    optimal_chunk_size = _get_optimal_chunk_size("maya1")
+
+    # Check if text needs chunking
+    if len(text) <= optimal_chunk_size:
+        # Short text - generate directly
+        audio_np = _generate_maya1_chunk(text, description, model, tokenizer, snac_model, device)
+        chunks_used = 1
+    else:
+        # Long text - split into chunks and generate each
+        chunks = _split_text_into_chunks(text, optimal_chunk_size)
+        print(
+            f"Text length ({len(text)} chars) exceeds chunk size ({optimal_chunk_size}). "
+            f"Splitting into {len(chunks)} chunks.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+        audio_chunks = []
+        for i, chunk in enumerate(chunks):
+            print(
+                f"  Generating chunk {i + 1}/{len(chunks)} ({len(chunk)} chars)...",
+                file=sys.stderr,
+                flush=True,
+            )
+            chunk_audio = _generate_maya1_chunk(
+                chunk, description, model, tokenizer, snac_model, device
+            )
+            audio_chunks.append(chunk_audio)
+
+        # Concatenate all chunks with small silence between (100ms at 24kHz = 2400 samples)
+        silence = np.zeros(2400, dtype=np.float32)
+        result_parts = []
+        for i, chunk_audio in enumerate(audio_chunks):
+            result_parts.append(chunk_audio)
+            if i < len(audio_chunks) - 1:
+                result_parts.append(silence)
+
+        audio_np = np.concatenate(result_parts)
+        chunks_used = len(chunks)
+        print("  All chunks generated and concatenated.", file=sys.stderr, flush=True)
+
     # Save
     output_path.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(output_path), audio_np, SAMPLE_RATE)
@@ -1067,6 +1474,7 @@ def generate_with_maya1(
         "output_path": str(output_path),
         "duration_ms": duration_ms,
         "sample_rate": SAMPLE_RATE,
+        "chunks_used": chunks_used,
     }
 
 
@@ -1199,8 +1607,12 @@ def generate_with_chatterbox(
     # Use the first reference audio for voice cloning
     primary_ref_audio = abs_ref_paths[0]
 
-    # Determine optimal chunk size based on system memory
-    optimal_chunk_size = _get_optimal_chunk_size()
+    # Convert any Maya1-style emotion tags to Chatterbox format
+    # Maya1: <laugh>, <sigh> → Chatterbox: [laugh], [sigh]
+    text = _convert_maya1_to_chatterbox_tags(text)
+
+    # Determine optimal chunk size based on calibration or system memory
+    optimal_chunk_size = _get_optimal_chunk_size("chatterbox")
     memory_gb, memory_type = _get_available_memory_gb()
 
     # Check if text needs chunking
@@ -1372,7 +1784,7 @@ def generate_segment_audio(
 
     return GenerateResult(
         segment_id=segment_id,
-        audio_path=relative_path,
+        audio_path=_get_absolute_sample_path(relative_path),
         duration_ms=duration_ms,
         description=voice_description if engine == "maya1" else None,
         engine=engine,
@@ -1437,7 +1849,7 @@ def generate_voice_sample(
         "character_id": character_id,
         "character_name": character.name,
         "sample_id": sample.id,
-        "sample_path": relative_path,
+        "sample_path": _get_absolute_sample_path(relative_path),
         "sample_text": text,
         "duration_ms": duration_ms,
         "description": voice_description,
@@ -1510,7 +1922,7 @@ def create_voice_candidates(
                 "candidate_index": i,
                 "sample_id": sample.id,
                 "description": description,
-                "sample_path": relative_path,
+                "sample_path": _get_absolute_sample_path(relative_path),
                 "duration_ms": duration_ms,
             }
         )
