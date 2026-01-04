@@ -15,6 +15,7 @@ from ..utils.ffmpeg import (
     get_audio_duration,
     concatenate_audio_files,
     create_audiobook_with_chapters,
+    convert_audio_format,
     ChapterMarker,
 )
 
@@ -370,3 +371,191 @@ def clear_segment_audio(segment_id: str) -> None:
         "UPDATE segments SET audio_path = NULL, duration_ms = NULL WHERE id = ?", (segment_id,)
     )
     db.commit()
+
+
+@dataclass
+class ConvertResult:
+    original_path: str
+    converted_path: str
+    original_format: str
+    target_format: str
+    original_size_bytes: int
+    converted_size_bytes: int
+    compression_ratio: float
+    duration_ms: int
+
+
+def convert_segment_audio(
+    segment_id: str,
+    target_format: str = "mp3",
+) -> ConvertResult:
+    """Convert a segment's audio to a more compact format.
+
+    Args:
+        segment_id: The segment whose audio to convert
+        target_format: Output format (mp3, m4a). Default: mp3
+
+    Returns:
+        ConvertResult with paths and size comparison
+    """
+    project_path = get_current_project_path()
+    if not project_path:
+        raise RuntimeError("No project is currently open")
+
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if target_format not in ("mp3", "m4a"):
+        raise ValueError("target_format must be 'mp3' or 'm4a'")
+
+    segment = get_segment(segment_id)
+    if not segment:
+        raise ValueError(f"Segment not found: {segment_id}")
+
+    if not segment.audio_path:
+        raise ValueError(f"Segment has no audio: {segment_id}")
+
+    audiobook_dir = get_audiobook_dir(project_path)
+    original_path = Path(audiobook_dir) / segment.audio_path
+
+    if not original_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {original_path}")
+
+    original_format = original_path.suffix.lstrip(".")
+    original_size = original_path.stat().st_size
+
+    # Create converted path
+    converted_path = original_path.with_suffix(f".{target_format}")
+
+    # Convert
+    convert_audio_format(str(original_path), str(converted_path), target_format)
+
+    converted_size = converted_path.stat().st_size
+    duration = get_audio_duration(str(converted_path))
+
+    return ConvertResult(
+        original_path=str(original_path),
+        converted_path=str(converted_path),
+        original_format=original_format,
+        target_format=target_format,
+        original_size_bytes=original_size,
+        converted_size_bytes=converted_size,
+        compression_ratio=round(original_size / converted_size, 2) if converted_size else 0,
+        duration_ms=duration,
+    )
+
+
+def convert_voice_sample(
+    sample_id: str,
+    target_format: str = "mp3",
+) -> ConvertResult:
+    """Convert a voice sample to a more compact format.
+
+    Args:
+        sample_id: The voice sample to convert
+        target_format: Output format (mp3, m4a). Default: mp3
+
+    Returns:
+        ConvertResult with paths and size comparison
+    """
+    from .voice_samples import get_voice_sample
+
+    project_path = get_current_project_path()
+    if not project_path:
+        raise RuntimeError("No project is currently open")
+
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if target_format not in ("mp3", "m4a"):
+        raise ValueError("target_format must be 'mp3' or 'm4a'")
+
+    sample = get_voice_sample(sample_id)
+    if not sample:
+        raise ValueError(f"Voice sample not found: {sample_id}")
+
+    audiobook_dir = get_audiobook_dir(project_path)
+    original_path = Path(audiobook_dir) / sample.sample_path
+
+    if not original_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {original_path}")
+
+    original_format = original_path.suffix.lstrip(".")
+    original_size = original_path.stat().st_size
+
+    # Create converted path
+    converted_path = original_path.with_suffix(f".{target_format}")
+
+    # Convert
+    convert_audio_format(str(original_path), str(converted_path), target_format)
+
+    converted_size = converted_path.stat().st_size
+    duration = get_audio_duration(str(converted_path))
+
+    return ConvertResult(
+        original_path=str(original_path),
+        converted_path=str(converted_path),
+        original_format=original_format,
+        target_format=target_format,
+        original_size_bytes=original_size,
+        converted_size_bytes=converted_size,
+        compression_ratio=round(original_size / converted_size, 2) if converted_size else 0,
+        duration_ms=duration,
+    )
+
+
+def get_audio_file_path(
+    segment_id: Optional[str] = None,
+    sample_id: Optional[str] = None,
+    format: str = "original",
+) -> dict:
+    """Get the file path for a segment or voice sample audio.
+
+    Args:
+        segment_id: Get audio for this segment
+        sample_id: Get audio for this voice sample
+        format: 'original' for the source file, or 'mp3'/'m4a' if converted version exists
+
+    Returns:
+        Dict with path, exists, format, and size_bytes
+    """
+    from .voice_samples import get_voice_sample
+
+    project_path = get_current_project_path()
+    if not project_path:
+        raise RuntimeError("No project is currently open")
+
+    if not segment_id and not sample_id:
+        raise ValueError("Either segment_id or sample_id is required")
+
+    audiobook_dir = get_audiobook_dir(project_path)
+
+    if segment_id:
+        segment = get_segment(segment_id)
+        if not segment:
+            raise ValueError(f"Segment not found: {segment_id}")
+        if not segment.audio_path:
+            raise ValueError(f"Segment has no audio: {segment_id}")
+        base_path = Path(audiobook_dir) / segment.audio_path
+    else:
+        sample = get_voice_sample(sample_id)
+        if not sample:
+            raise ValueError(f"Voice sample not found: {sample_id}")
+        base_path = Path(audiobook_dir) / sample.sample_path
+
+    # Determine which file to return
+    if format == "original":
+        target_path = base_path
+    else:
+        target_path = base_path.with_suffix(f".{format}")
+
+    exists = target_path.exists()
+    size_bytes = target_path.stat().st_size if exists else 0
+    actual_format = target_path.suffix.lstrip(".") if exists else None
+
+    return {
+        "path": str(target_path),
+        "exists": exists,
+        "format": actual_format,
+        "size_bytes": size_bytes,
+    }

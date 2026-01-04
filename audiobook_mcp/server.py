@@ -90,6 +90,9 @@ from .tools.audio import (
     get_stitch_status,
     stitch_book,
     clear_segment_audio,
+    convert_segment_audio,
+    convert_voice_sample,
+    get_audio_file_path,
 )
 
 
@@ -1619,6 +1622,57 @@ def clear_audio_from_segment(segment_id: str) -> dict:
     """
     clear_segment_audio(segment_id)
     return {"success": True, "message": "Audio cleared from segment"}
+
+
+@mcp.tool()
+def convert_audio_to_mp3(
+    segment_id: Optional[str] = None,
+    sample_id: Optional[str] = None,
+    target_format: str = "mp3",
+) -> dict:
+    """Convert segment or voice sample audio to a compact format.
+
+    WAV files are typically 10-20x larger than MP3. Use this to create
+    smaller versions for playback or transfer.
+
+    Args:
+        segment_id: Convert audio for this segment
+        sample_id: Convert audio for this voice sample
+        target_format: 'mp3' (default) or 'm4a'
+
+    The original WAV file is preserved; a new compressed file is created alongside it.
+    """
+    if not segment_id and not sample_id:
+        raise ValueError("Either segment_id or sample_id is required")
+
+    if segment_id:
+        result = convert_segment_audio(segment_id, target_format)
+    else:
+        result = convert_voice_sample(sample_id, target_format)
+
+    return {
+        "success": True,
+        "message": f"Converted to {target_format} ({result.compression_ratio}x smaller)",
+        **to_dict(result),
+    }
+
+
+@mcp.tool()
+def get_audio_path(
+    segment_id: Optional[str] = None,
+    sample_id: Optional[str] = None,
+    format: str = "original",
+) -> dict:
+    """Get the file path for segment or voice sample audio.
+
+    Args:
+        segment_id: Get audio path for this segment
+        sample_id: Get audio path for this voice sample
+        format: 'original' for source file, 'mp3' or 'm4a' for converted version
+
+    Returns the absolute file path, whether it exists, format, and file size.
+    """
+    return get_audio_file_path(segment_id, sample_id, format)
 
 
 @mcp.tool()
