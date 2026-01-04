@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY audiobook_mcp ./audiobook_mcp
 
 # Install the package
@@ -39,10 +39,6 @@ RUN useradd -m -u 1001 mcp
 RUN mkdir -p /projects && chown -R mcp:mcp /projects
 
 USER mcp
-
-# Default Fish Speech server URL (can be overridden with -e FISH_SPEECH_API_URL=...)
-# When running with docker-compose, this points to the fish-speech service
-ENV FISH_SPEECH_API_URL=http://localhost:8080
 
 # MCP servers communicate via stdio
 ENTRYPOINT ["audiobook-mcp"]
