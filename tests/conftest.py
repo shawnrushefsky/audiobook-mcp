@@ -1,9 +1,7 @@
 """Shared fixtures for audiobook-mcp tests."""
 
-import os
 import shutil
 import tempfile
-from pathlib import Path
 
 import pytest
 

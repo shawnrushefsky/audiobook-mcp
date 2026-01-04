@@ -1,12 +1,10 @@
 """Tests for project management."""
 
-import os
 from pathlib import Path
 
 import pytest
 
 from audiobook_mcp.tools.projects import init_project, get_project_info, update_project
-from audiobook_mcp.db.connection import close_database
 
 
 class TestProjectInitialization:
@@ -14,7 +12,7 @@ class TestProjectInitialization:
 
     def test_init_project_creates_directory_structure(self, temp_project_dir):
         """Test that init_project creates the expected directory structure."""
-        project = init_project(temp_project_dir, "Test Book", "Test Author")
+        init_project(temp_project_dir, "Test Book", "Test Author")
 
         audiobook_dir = Path(temp_project_dir) / ".audiobook"
         assert audiobook_dir.exists()
@@ -25,9 +23,7 @@ class TestProjectInitialization:
 
     def test_init_project_sets_metadata(self, temp_project_dir):
         """Test that init_project sets project metadata correctly."""
-        project = init_project(
-            temp_project_dir, "My Audiobook", "John Doe", "A test audiobook"
-        )
+        project = init_project(temp_project_dir, "My Audiobook", "John Doe", "A test audiobook")
 
         assert project.title == "My Audiobook"
         assert project.author == "John Doe"

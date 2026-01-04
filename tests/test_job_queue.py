@@ -1,19 +1,15 @@
 """Tests for the async job queue system."""
 
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
 
 from audiobook_mcp.server import (
     create_job,
     get_job,
     enqueue_job,
-    update_job,
     get_queue_length,
     JobStatus,
-    _jobs,
     _job_queue,
     _queue_lock,
 )

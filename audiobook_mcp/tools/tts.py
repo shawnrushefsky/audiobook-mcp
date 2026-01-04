@@ -9,7 +9,6 @@ import json
 import os
 import shutil
 import sys
-import requests
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, field
@@ -1088,6 +1087,7 @@ def _get_absolute_sample_path(sample_path: str) -> str:
     audio_dir = _get_project_audio_dir()
     return str(audio_dir / sample_path)
 
+
 # Global Chatterbox model instance (loaded lazily)
 _chatterbox_model = None
 
@@ -1357,9 +1357,7 @@ def generate_segment_audio(
         voice_description = None
 
     else:
-        raise ValueError(
-            f"Unknown TTS engine: {engine}. Use 'maya1' or 'chatterbox'."
-        )
+        raise ValueError(f"Unknown TTS engine: {engine}. Use 'maya1' or 'chatterbox'.")
 
     # Update segment with audio path (use lock for thread safety)
     relative_path = f"audio/segments/{filename}"

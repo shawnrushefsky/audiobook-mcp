@@ -422,7 +422,9 @@ def voice_design(character_name: str, character_description: str = "") -> str:
     Generates a prompt to create a Maya1-compatible voice description
     with all the necessary parameters.
     """
-    desc_text = f"\n\nCharacter description: {character_description}" if character_description else ""
+    desc_text = (
+        f"\n\nCharacter description: {character_description}" if character_description else ""
+    )
     return f"""Help me design a voice for the character "{character_name}".{desc_text}
 
 I need a Maya1-compatible voice description with these parameters:
