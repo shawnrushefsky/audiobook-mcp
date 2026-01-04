@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "audiobook-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "${workspaceFolder}", "audiobook-mcp"],
+      "env": {
+        "FISH_SPEECH_API_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
