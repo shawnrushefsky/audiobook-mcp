@@ -448,6 +448,117 @@ These samples will be used to generate reference audio for voice cloning."""
 
 
 @mcp.prompt()
+def voice_workflow() -> str:
+    """Complete voice setup and audio generation workflow.
+
+    Documents the intended two-stage TTS workflow:
+    1. Maya1 creates voice samples from descriptions
+    2. Chatterbox clones those samples for segment audio
+    """
+    return """# Audiobook Voice Workflow
+
+This documents the intended workflow for creating character voices and generating audio.
+
+## Overview
+
+The system uses a **two-stage TTS workflow**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  STAGE 1: Voice Sample Creation (Maya1)                        │
+│                                                                 │
+│  Voice Description + Sample Scripts → Reference Audio Samples  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STAGE 2: Audio Generation (Chatterbox)                        │
+│                                                                 │
+│  Voice Samples + Segment Text → Final Audio                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Stage 1: Create Voice Samples with Maya1
+
+Maya1 is a **voice design** engine - it creates unique voices from natural language descriptions.
+
+### Step 1.1: Set Character Voice Description
+
+```
+set_character_voice(
+    character_id="...",
+    provider="maya1",
+    voice_ref="Realistic female voice in the 30s age with american accent. Medium pitch, warm timbre, measured pacing, professional tone."
+)
+```
+
+### Step 1.2: Generate Voice Samples
+
+Provide 3 in-character sample scripts (~30 seconds each when spoken):
+
+```
+create_voice_samples(
+    character_id="...",
+    voice_description="...",  # or uses voice_ref from character
+    sample_texts=[
+        "Sample 1: Calm narration or reflection...",
+        "Sample 2: Emotional speech with <laugh> or <angry> tags...",
+        "Sample 3: Casual conversational dialogue..."
+    ]
+)
+```
+
+This generates 3 WAV files stored as voice samples for the character.
+
+## Stage 2: Generate Segment Audio with Chatterbox
+
+Chatterbox is a **voice cloning** engine - it uses the Maya1-generated samples to clone the voice.
+
+### Prerequisites
+- Character must have voice samples (from Stage 1)
+- Segment must be assigned to a character
+
+### Generate Audio
+
+```
+# Single segment
+generate_audio_for_segment(
+    segment_id="...",
+    engine="chatterbox"  # Uses voice samples for cloning
+)
+
+# Batch generation (recommended)
+generate_batch_segment_audio(
+    chapter_id="...",
+    engine="chatterbox"
+)
+```
+
+### Emotion Control in Chatterbox
+
+Add paralinguistic tags to segment text:
+- `[laugh]` - laughter
+- `[chuckle]` - light laugh
+- `[cough]` - cough
+- `[sigh]` - sigh
+
+## Common Mistakes to Avoid
+
+1. **DON'T** use Maya1 for segment audio directly - it's for sample creation only
+2. **DON'T** try to use Chatterbox without voice samples - create samples first
+3. **DON'T** forget to assign segments to characters before generating audio
+
+## Quick Reference
+
+| Task | Tool | Engine |
+|------|------|--------|
+| Set voice description | `set_character_voice` | - |
+| Create voice samples | `create_voice_samples` | Maya1 |
+| Generate segment audio | `generate_audio_for_segment` | Chatterbox |
+| Batch generate audio | `generate_batch_segment_audio` | Chatterbox |
+"""
+
+
+@mcp.prompt()
 def chapter_workflow(chapter_title: str = "the current chapter") -> str:
     """Guide for processing a chapter end-to-end.
 
