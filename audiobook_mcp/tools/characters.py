@@ -181,11 +181,13 @@ def set_voice(
         raise ValueError(f"Character not found: {character_id}")
 
     voice_config = VoiceConfig(provider=provider, voice_id=voice_id, settings=settings)
-    voice_config_json = json.dumps({
-        "provider": voice_config.provider,
-        "voice_id": voice_config.voice_id,
-        "settings": voice_config.settings,
-    })
+    voice_config_json = json.dumps(
+        {
+            "provider": voice_config.provider,
+            "voice_id": voice_config.voice_id,
+            "settings": voice_config.settings,
+        }
+    )
 
     cursor.execute(
         "UPDATE characters SET voice_config = ? WHERE id = ?",

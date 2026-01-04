@@ -14,19 +14,25 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Maya1 TTS support
+# Maya1 TTS support (voice design from descriptions)
 maya1 = [
     "torch>=2.0.0",
     "transformers>=4.35.0",
     "snac",
 ]
-# Fish Speech TTS support
+# Fish Speech TTS support (voice cloning - CUDA or cloud)
 fish-speech = [
     "fish-audio-sdk>=1.0.0",
 ]
+# Chatterbox TTS support (voice cloning with emotion control)
+chatterbox = [
+    "chatterbox-tts>=0.1.0",
+    "numpy<2.4",  # Chatterbox requires numpy < 2.4 for numba compatibility
+    "onnx==1.16.0",  # Pin onnx for ml_dtypes compatibility
+]
 # All TTS engines
 tts = [
-    "audiobook-mcp[maya1,fish-speech]",
+    "audiobook-mcp[maya1,fish-speech,chatterbox]",
 ]
 dev = [
     "pytest>=7.0.0",

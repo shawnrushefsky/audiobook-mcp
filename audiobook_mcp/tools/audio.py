@@ -1,6 +1,5 @@
 """Audio registration and stitching tools."""
 
-import os
 import shutil
 from pathlib import Path
 from dataclasses import dataclass
@@ -134,7 +133,7 @@ def register_segment_audio(
     # Update segment with audio info
     cursor.execute(
         "UPDATE segments SET audio_path = ?, duration_ms = ? WHERE id = ?",
-        (relative_path, actual_duration, segment_id)
+        (relative_path, actual_duration, segment_id),
     )
     db.commit()
 
@@ -170,18 +169,16 @@ def get_chapter_audio_status(chapter_id: str) -> ChapterAudioStatus:
             if row:
                 character_name = row["name"]
 
-        text_preview = (
-            s.text_content[:50] + "..."
-            if len(s.text_content) > 50
-            else s.text_content
-        )
+        text_preview = s.text_content[:50] + "..." if len(s.text_content) > 50 else s.text_content
 
-        missing_with_names.append(MissingSegment(
-            id=s.id,
-            sort_order=s.sort_order,
-            text_preview=text_preview,
-            character_name=character_name,
-        ))
+        missing_with_names.append(
+            MissingSegment(
+                id=s.id,
+                sort_order=s.sort_order,
+                text_preview=text_preview,
+                character_name=character_name,
+            )
+        )
 
     total_duration = sum(s.duration_ms or 0 for s in with_audio)
 
@@ -226,7 +223,8 @@ def stitch_chapter(
 
     # Determine output path
     import re
-    safe_title = re.sub(r'[^a-zA-Z0-9]', '_', status.chapter_title)
+
+    safe_title = re.sub(r"[^a-zA-Z0-9]", "_", status.chapter_title)
     filename = output_filename or f"{safe_title}.mp3"
     output_dir = Path(audiobook_dir) / "exports" / "chapters"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -254,15 +252,17 @@ def get_stitch_status() -> StitchStatus:
     chapter_statuses: list[ChapterStatus] = []
     for ch in chapters:
         status = get_chapter_audio_status(ch.id)
-        chapter_statuses.append(ChapterStatus(
-            id=ch.id,
-            title=ch.title,
-            sort_order=ch.sort_order,
-            segment_count=ch.segment_count,
-            segments_with_audio=status.segments_with_audio,
-            duration_ms=status.total_duration_ms,
-            ready=status.ready_to_stitch,
-        ))
+        chapter_statuses.append(
+            ChapterStatus(
+                id=ch.id,
+                title=ch.title,
+                sort_order=ch.sort_order,
+                segment_count=ch.segment_count,
+                segments_with_audio=status.segments_with_audio,
+                duration_ms=status.total_duration_ms,
+                ready=status.ready_to_stitch,
+            )
+        )
 
     total_segments = sum(ch.segment_count for ch in chapter_statuses)
     total_with_audio = sum(ch.segments_with_audio for ch in chapter_statuses)
@@ -298,9 +298,7 @@ def stitch_book(
     status = get_stitch_status()
     if not status.ready_to_stitch_book:
         not_ready = [ch.title for ch in status.chapters if not ch.ready]
-        raise ValueError(
-            f"Book is not ready to stitch. Chapters not ready: {', '.join(not_ready)}"
-        )
+        raise ValueError(f"Book is not ready to stitch. Chapters not ready: {', '.join(not_ready)}")
 
     audiobook_dir = get_audiobook_dir(project_path)
     info = get_project_info()
@@ -317,16 +315,19 @@ def stitch_book(
         chapter_files.append(result.output_path)
 
         # Record chapter marker
-        chapter_markers.append(ChapterMarker(
-            title=chapter.title,
-            start_ms=current_ms,
-        ))
+        chapter_markers.append(
+            ChapterMarker(
+                title=chapter.title,
+                start_ms=current_ms,
+            )
+        )
 
         current_ms += result.total_duration_ms
 
     # Determine output path
     import re
-    safe_title = re.sub(r'[^a-zA-Z0-9]', '_', info.project.title)
+
+    safe_title = re.sub(r"[^a-zA-Z0-9]", "_", info.project.title)
     filename = output_filename or f"{safe_title}.mp3"
     output_dir = Path(audiobook_dir) / "exports" / "book"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -350,10 +351,7 @@ def stitch_book(
         output_path=str(output_path),
         chapter_count=len(chapters),
         total_duration_ms=duration,
-        chapters=[
-            ChapterTimestamp(title=cm.title, start_ms=cm.start_ms)
-            for cm in chapter_markers
-        ],
+        chapters=[ChapterTimestamp(title=cm.title, start_ms=cm.start_ms) for cm in chapter_markers],
     )
 
 
@@ -369,7 +367,6 @@ def clear_segment_audio(segment_id: str) -> None:
 
     # Clear audio path and duration
     cursor.execute(
-        "UPDATE segments SET audio_path = NULL, duration_ms = NULL WHERE id = ?",
-        (segment_id,)
+        "UPDATE segments SET audio_path = NULL, duration_ms = NULL WHERE id = ?", (segment_id,)
     )
     db.commit()

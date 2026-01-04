@@ -1,6 +1,7 @@
 """Database connection management for audiobook projects."""
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +10,7 @@ DB_FILENAME = "db.sqlite"
 
 _current_db: Optional[sqlite3.Connection] = None
 _current_project_path: Optional[str] = None
+_db_lock = threading.Lock()  # Protects concurrent database writes
 
 
 def get_audiobook_dir(project_path: str) -> Path:
@@ -27,12 +29,16 @@ def is_audiobook_project(project_path: str) -> bool:
 
 
 def init_project_directory(project_path: str) -> None:
-    """Initialize the .audiobook directory structure for a new project."""
+    """Initialize the .audiobook directory structure for a new project.
+
+    Creates the project directory if it doesn't exist.
+    """
     project = Path(project_path)
     audiobook_dir = get_audiobook_dir(project_path)
 
+    # Auto-create project directory if it doesn't exist
     if not project.exists():
-        raise ValueError(f"Project directory does not exist: {project_path}")
+        project.mkdir(parents=True, exist_ok=True)
 
     if audiobook_dir.exists():
         raise ValueError(f"Project already initialized: {audiobook_dir}")
@@ -59,7 +65,8 @@ def open_database(project_path: str) -> sqlite3.Connection:
         if not get_audiobook_dir(project_path).exists():
             raise ValueError(f"Not an audiobook project. Run init_project first: {project_path}")
 
-        _current_db = sqlite3.connect(str(db_path))
+        # check_same_thread=False allows async jobs in background threads to access the db
+        _current_db = sqlite3.connect(str(db_path), check_same_thread=False)
         _current_db.row_factory = sqlite3.Row  # Enable dict-like access
         _current_db.execute("PRAGMA journal_mode = WAL")
         _current_db.execute("PRAGMA foreign_keys = ON")
@@ -73,6 +80,11 @@ def get_database() -> sqlite3.Connection:
     if not _current_db:
         raise ValueError("No project is currently open. Use open_project first.")
     return _current_db
+
+
+def get_db_lock() -> threading.Lock:
+    """Get the database lock for thread-safe writes."""
+    return _db_lock
 
 
 def get_current_project_path() -> Optional[str]:

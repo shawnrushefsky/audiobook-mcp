@@ -51,3 +51,7 @@ htmlcov/
 
 # Project data (local testing)
 .audiobook/
+test-pirate/
+
+# Ruff cache
+.ruff_cache/

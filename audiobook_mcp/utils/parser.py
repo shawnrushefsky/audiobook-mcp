@@ -1,4 +1,19 @@
-"""Text parsing utilities for detecting dialogue and splitting prose."""
+"""Text parsing utilities for screenplay-format scripts.
+
+Expected format:
+    CHARACTER NAME: Dialogue text here.
+
+    ANOTHER CHARACTER: More dialogue.
+    This continues on the next line.
+
+    NARRATOR: Description of the scene.
+
+Rules:
+- Character name is everything before the first `: ` (colon-space)
+- Dialogue/narration is everything after
+- Blank lines separate segments
+- Multi-line text continues until the next CHARACTER: line or blank line
+"""
 
 import re
 from dataclasses import dataclass
@@ -7,122 +22,105 @@ from typing import Optional
 
 @dataclass
 class ParsedSegment:
+    """A parsed segment from screenplay-format text."""
+
     text: str
-    is_dialogue: bool
-    dialogue_attribution: Optional[str] = None
+    character_name: Optional[str] = None
+    is_narration: bool = False
 
 
-# Speech verbs for dialogue detection
-SPEECH_VERBS = [
-    "said", "asked", "replied", "exclaimed", "whispered", "shouted", "muttered",
-    "answered", "called", "cried", "yelled", "demanded", "inquired", "stated",
-    "declared", "announced", "continued", "added", "interrupted", "suggested",
-    "murmured", "sighed", "groaned", "laughed", "chuckled", "growled", "hissed",
-    "screamed", "bellowed", "pleaded", "begged", "insisted", "protested",
-    "objected", "agreed", "admitted", "confessed", "explained", "warned",
-    "threatened", "promised", "vowed", "swore", "lied", "joked", "teased",
-    "mocked", "sneered", "snapped", "barked", "snarled", "cooed", "purred", "crooned"
-]
+def parse_screenplay(text: str) -> list[ParsedSegment]:
+    """Parse screenplay-format text into segments.
 
-SPEECH_VERBS_PATTERN = "|".join(SPEECH_VERBS)
+    Format: CHARACTER NAME: dialogue text
 
+    Args:
+        text: The screenplay-format text to parse.
 
-def split_into_paragraphs(text: str) -> list[str]:
-    """Split text into paragraphs."""
-    paragraphs = re.split(r'\n\s*\n', text)
-    return [p.strip() for p in paragraphs if p.strip()]
-
-
-def parse_dialogue(text: str) -> list[ParsedSegment]:
-    """Split a paragraph into dialogue and narration segments.
-
-    Handles quoted dialogue with optional attribution.
+    Returns:
+        List of ParsedSegment objects with character names and text.
     """
     segments: list[ParsedSegment] = []
+    lines = text.strip().split("\n")
 
-    # Match quoted text with optional attribution
-    # Quote characters: " " « ' '
-    open_quotes = '""«\'\''
-    close_quotes = '""»\'\''
-    dialogue_pattern = re.compile(
-        rf'([{open_quotes}])([^{close_quotes}]+)([{close_quotes}]+)'
-        rf'(\s*[,.]?\s*(?:{SPEECH_VERBS_PATTERN})?\s*[A-Z][a-z]*(?:\s+[A-Z][a-z]*)?)?',
-        re.IGNORECASE
-    )
+    current_character: Optional[str] = None
+    current_text_lines: list[str] = []
 
-    last_index = 0
+    def flush_segment():
+        """Save the current segment if there's content."""
+        nonlocal current_character, current_text_lines
+        if current_text_lines:
+            text_content = " ".join(current_text_lines).strip()
+            if text_content:
+                is_narration = current_character and current_character.upper() == "NARRATOR"
+                segments.append(
+                    ParsedSegment(
+                        text=text_content,
+                        character_name=current_character,
+                        is_narration=is_narration or False,
+                    )
+                )
+        current_text_lines = []
 
-    for match in dialogue_pattern.finditer(text):
-        # Add any narration before this dialogue
-        if match.start() > last_index:
-            narration = text[last_index:match.start()].strip()
-            if narration:
-                segments.append(ParsedSegment(text=narration, is_dialogue=False))
+    # Pattern to match "CHARACTER NAME: text" at the start of a line
+    # Character names can include letters, numbers, spaces, and common punctuation
+    character_pattern = re.compile(r"^([A-Z][A-Za-z0-9 '\-_.]+?):\s*(.*)$")
 
-        # Add the dialogue
-        dialogue_text = match.group(2)
-        attribution = match.group(4)
+    for line in lines:
+        line = line.strip()
 
-        segments.append(ParsedSegment(
-            text=dialogue_text,
-            is_dialogue=True,
-            dialogue_attribution=attribution.strip() if attribution else None
-        ))
+        # Blank line ends current segment
+        if not line:
+            flush_segment()
+            current_character = None
+            continue
 
-        last_index = match.end()
+        # Check if this line starts a new character's dialogue
+        match = character_pattern.match(line)
+        if match:
+            # Save previous segment before starting new one
+            flush_segment()
 
-    # Add any remaining narration
-    if last_index < len(text):
-        remaining = text[last_index:].strip()
-        if remaining:
-            segments.append(ParsedSegment(text=remaining, is_dialogue=False))
+            current_character = match.group(1).strip()
+            dialogue = match.group(2).strip()
+            if dialogue:
+                current_text_lines.append(dialogue)
+        else:
+            # Continuation of current segment
+            current_text_lines.append(line)
 
-    # If no dialogue was found, return the whole text as narration
-    if not segments:
-        segments.append(ParsedSegment(text=text, is_dialogue=False))
+    # Don't forget the last segment
+    flush_segment()
 
     return segments
 
 
 def parse_text(text: str) -> list[ParsedSegment]:
-    """Parse an entire text into segments, preserving paragraph structure
-    and splitting dialogue from narration within each paragraph.
+    """Parse text into segments.
+
+    This is an alias for parse_screenplay for backward compatibility.
     """
-    paragraphs = split_into_paragraphs(text)
-    all_segments: list[ParsedSegment] = []
-
-    for paragraph in paragraphs:
-        segments = parse_dialogue(paragraph)
-        all_segments.extend(segments)
-
-    return all_segments
+    return parse_screenplay(text)
 
 
 def extract_character_names(text: str) -> list[str]:
-    """Extract character names mentioned in dialogue attributions."""
+    """Extract character names from screenplay-format text.
+
+    Args:
+        text: The screenplay-format text to analyze.
+
+    Returns:
+        Sorted list of unique character names found.
+    """
     names: set[str] = set()
 
-    # Pattern to find dialogue attributions: "..." said Name
-    close_quotes = '""»\'\''
-    open_quotes = '""«\'\''
-    attribution_pattern = re.compile(
-        rf'[{close_quotes}]\s*[,.]?\s*(?:{SPEECH_VERBS_PATTERN})\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',
-        re.IGNORECASE
-    )
+    # Pattern to match "CHARACTER NAME:" at the start of a line
+    character_pattern = re.compile(r"^([A-Z][A-Za-z0-9 '\-_.]+?):\s*", re.MULTILINE)
 
-    for match in attribution_pattern.finditer(text):
-        if match.group(1):
-            names.add(match.group(1))
-
-    # Also look for "Name said" patterns
-    prefix_pattern = re.compile(
-        rf'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:{SPEECH_VERBS_PATTERN})[,.]?\s*[{open_quotes}]',
-        re.IGNORECASE
-    )
-
-    for match in prefix_pattern.finditer(text):
-        if match.group(1):
-            names.add(match.group(1))
+    for match in character_pattern.finditer(text):
+        name = match.group(1).strip()
+        if name:
+            names.add(name)
 
     return sorted(names)
 
@@ -130,11 +128,11 @@ def extract_character_names(text: str) -> list[str]:
 def clean_for_tts(text: str) -> str:
     """Clean text for TTS (remove excessive whitespace, normalize quotes, etc.)."""
     result = text
-    result = re.sub(r'\s+', ' ', result)  # Normalize whitespace
-    result = result.replace('"', '"').replace('"', '"')  # Normalize double quotes
-    result = result.replace(''', "'").replace(''', "'")  # Normalize single quotes
-    result = result.replace('«', '"').replace('»', '"')  # Convert guillemets
-    result = result.replace('—', ' - ')  # Em dash with spaces
-    result = result.replace('–', ' - ')  # En dash with spaces
-    result = result.replace('...', '…')  # Normalize ellipsis
+    result = re.sub(r"\s+", " ", result)  # Normalize whitespace
+    result = result.replace('"', '"').replace('"', '"')  # Normalize curly double quotes
+    result = result.replace("'", "'").replace("'", "'")  # Normalize curly single quotes
+    result = result.replace("«", '"').replace("»", '"')  # Convert guillemets
+    result = result.replace("—", " - ")  # Em dash with spaces
+    result = result.replace("–", " - ")  # En dash with spaces
+    result = result.replace("...", "…")  # Normalize ellipsis
     return result.strip()

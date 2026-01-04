@@ -1,4 +1,12 @@
-"""Import tools for parsing and importing text into chapters."""
+"""Import tools for parsing and importing screenplay-format text into chapters.
+
+Expected screenplay format:
+    CHARACTER NAME: Dialogue or narration text here.
+
+    NARRATOR: The scene description goes here.
+
+    CAPTAIN BLACKBEARD: Arr, me hearties!
+"""
 
 import re
 from dataclasses import dataclass
@@ -8,15 +16,17 @@ from ..db.connection import get_database
 from .chapters import get_chapter
 from .characters import get_character, list_characters
 from .segments import bulk_add_segments, list_segments, update_segment
-from ..utils.parser import parse_text, extract_character_names, clean_for_tts
+from ..utils.parser import parse_screenplay, extract_character_names, clean_for_tts
 
 
 @dataclass
 class ImportResult:
     segments_created: int
-    dialogue_segments: int
-    narration_segments: int
-    detected_names: list[str]
+    assigned_segments: int
+    unassigned_segments: int
+    character_names_in_script: list[str]
+    matched_characters: list[str]
+    unmatched_characters: list[str]
 
 
 @dataclass
@@ -79,7 +89,26 @@ def import_chapter_text(
     text: str,
     default_character_id: Optional[str] = None,
 ) -> ImportResult:
-    """Import prose text into a chapter, splitting into segments."""
+    """Import screenplay-format text into a chapter.
+
+    Expected format:
+        CHARACTER NAME: Dialogue or narration text.
+
+        NARRATOR: Scene description here.
+
+    Character names in the script are matched (case-insensitive) to existing
+    characters in the project. Unmatched character names result in unassigned
+    segments that can be assigned later.
+
+    Args:
+        chapter_id: The chapter to import into.
+        text: Screenplay-format text to import.
+        default_character_id: Optional character to assign to segments without
+            a recognized character name.
+
+    Returns:
+        ImportResult with statistics about the import.
+    """
     # Verify chapter exists
     chapter = get_chapter(chapter_id)
     if not chapter:
@@ -91,32 +120,60 @@ def import_chapter_text(
         if not character:
             raise ValueError(f"Character not found: {default_character_id}")
 
-    # Parse the text
-    parsed = parse_text(text)
-    detected_names = extract_character_names(text)
+    # Get existing characters for name matching
+    existing_characters = list_characters()
+    # Build a case-insensitive lookup: lowercase name -> character
+    name_to_character = {c.name.lower(): c for c in existing_characters}
+
+    # Parse the screenplay-format text
+    parsed = parse_screenplay(text)
+    script_names = extract_character_names(text)
+
+    # Track which names matched and which didn't
+    matched_names: set[str] = set()
+    unmatched_names: set[str] = set()
 
     # Clean and prepare segments for insertion
-    segments_to_add = [
-        {
-            "text_content": clean_for_tts(seg.text),
-            # Assign default character to narration segments only
-            "character_id": default_character_id if not seg.is_dialogue else None,
-        }
-        for seg in parsed
-    ]
+    segments_to_add = []
+    assigned_count = 0
+    unassigned_count = 0
+
+    for seg in parsed:
+        character_id = None
+
+        if seg.character_name:
+            # Try to match the character name (case-insensitive)
+            lookup_name = seg.character_name.lower()
+            if lookup_name in name_to_character:
+                character_id = name_to_character[lookup_name].id
+                matched_names.add(seg.character_name)
+            else:
+                unmatched_names.add(seg.character_name)
+                # Use default character if provided
+                character_id = default_character_id
+
+        if character_id:
+            assigned_count += 1
+        else:
+            unassigned_count += 1
+
+        segments_to_add.append(
+            {
+                "text_content": clean_for_tts(seg.text),
+                "character_id": character_id,
+            }
+        )
 
     # Bulk add segments
     bulk_add_segments(chapter_id, segments_to_add)
 
-    # Count stats
-    dialogue_count = sum(1 for s in parsed if s.is_dialogue)
-    narration_count = sum(1 for s in parsed if not s.is_dialogue)
-
     return ImportResult(
         segments_created=len(parsed),
-        dialogue_segments=dialogue_count,
-        narration_segments=narration_count,
-        detected_names=detected_names,
+        assigned_segments=assigned_count,
+        unassigned_segments=unassigned_count,
+        character_names_in_script=script_names,
+        matched_characters=sorted(matched_names),
+        unmatched_characters=sorted(unmatched_names),
     )
 
 
@@ -166,13 +223,16 @@ def export_character_lines(character_id: str) -> CharacterLinesExport:
         raise ValueError(f"Character not found: {character_id}")
 
     # Get all segments for this character with chapter info
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT s.*, ch.title as chapter_title
         FROM segments s
         JOIN chapters ch ON s.chapter_id = ch.id
         WHERE s.character_id = ?
         ORDER BY ch.sort_order ASC, s.sort_order ASC
-    """, (character_id,))
+    """,
+        (character_id,),
+    )
 
     rows = cursor.fetchall()
 
@@ -225,16 +285,16 @@ def detect_dialogue(chapter_id: str) -> DialogueDetection:
                 break
 
         text_preview = (
-            seg.text_content[:80] + "..."
-            if len(seg.text_content) > 80
-            else seg.text_content
+            seg.text_content[:80] + "..." if len(seg.text_content) > 80 else seg.text_content
         )
 
-        suggestions.append(DialogueSuggestion(
-            segment_id=seg.id,
-            text_preview=text_preview,
-            potential_speaker=potential_speaker,
-        ))
+        suggestions.append(
+            DialogueSuggestion(
+                segment_id=seg.id,
+                text_preview=text_preview,
+                potential_speaker=potential_speaker,
+            )
+        )
 
     return DialogueDetection(
         total_segments=len(segments),

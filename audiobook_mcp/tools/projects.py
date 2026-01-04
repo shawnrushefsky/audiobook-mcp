@@ -1,7 +1,11 @@
 """Project management tools."""
 
+import os
+import re
+import sys
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
@@ -13,6 +17,27 @@ from ..db.connection import (
     get_current_project_path,
 )
 from ..db.schema import initialize_schema, Project
+
+
+def get_default_project_path(title: str) -> str:
+    """Get the default project path for a given title.
+
+    Returns ~/Documents/<sanitized-title> on macOS/Linux,
+    or the equivalent on Windows.
+    """
+    # Sanitize title for use as directory name
+    safe_title = re.sub(r"[^\w\s-]", "", title)
+    safe_title = re.sub(r"[-\s]+", "-", safe_title).strip("-")
+
+    # Get Documents folder (platform-aware)
+    if sys.platform == "win32":
+        # Windows: use USERPROFILE\Documents
+        documents = Path(os.environ.get("USERPROFILE", "~")) / "Documents"
+    else:
+        # macOS/Linux: use ~/Documents
+        documents = Path.home() / "Documents"
+
+    return str(documents / safe_title)
 
 
 @dataclass

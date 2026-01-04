@@ -53,7 +53,16 @@ def add_voice_sample(
         INSERT INTO voice_samples (id, character_id, sample_path, sample_text, duration_ms, is_url, sort_order, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (sample_id, character_id, sample_path, sample_text, duration_ms, 1 if is_url else 0, sort_order, now),
+        (
+            sample_id,
+            character_id,
+            sample_path,
+            sample_text,
+            duration_ms,
+            1 if is_url else 0,
+            sort_order,
+            now,
+        ),
     )
     db.commit()
 

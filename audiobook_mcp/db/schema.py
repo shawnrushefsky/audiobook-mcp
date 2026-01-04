@@ -100,6 +100,7 @@ def initialize_schema(db: sqlite3.Connection) -> None:
 
 # Type definitions matching the database schema
 
+
 @dataclass
 class Project:
     id: str
@@ -155,6 +156,7 @@ class Segment:
 @dataclass
 class VoiceConfig:
     """Voice configuration structure (stored as JSON in voice_config)."""
+
     provider: str  # e.g., "maya1", "fish_speech", "elevenlabs"
     voice_id: str  # For maya1: description, for fish_speech: model_id or description
     settings: Optional[dict[str, Any]] = None

@@ -4,7 +4,6 @@ import subprocess
 import json
 import os
 import tempfile
-from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
@@ -26,11 +25,7 @@ class AudioValidation:
 def check_ffmpeg() -> bool:
     """Check if ffmpeg is installed and available."""
     try:
-        subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            check=True
-        )
+        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
@@ -44,14 +39,18 @@ def get_audio_duration(file_path: str) -> int:
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                file_path
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                file_path,
             ],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         seconds = float(result.stdout.strip())
         return round(seconds * 1000)
@@ -67,31 +66,31 @@ def validate_audio_file(file_path: str) -> AudioValidation:
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=duration,format_name",
-                "-of", "json",
-                file_path
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration,format_name",
+                "-of",
+                "json",
+                file_path,
             ],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         probe = json.loads(result.stdout)
 
         return AudioValidation(
             valid=True,
             duration_ms=round(float(probe["format"]["duration"]) * 1000),
-            format=probe["format"]["format_name"]
+            format=probe["format"]["format_name"],
         )
     except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError) as e:
         return AudioValidation(valid=False, error=f"Invalid audio file: {e}")
 
 
-def concatenate_audio_files(
-    input_files: list[str],
-    output_path: str,
-    format: str = "mp3"
-) -> None:
+def concatenate_audio_files(input_files: list[str], output_path: str, format: str = "mp3") -> None:
     """Concatenate multiple audio files into one."""
     if not input_files:
         raise ValueError("No input files provided")
@@ -107,7 +106,7 @@ def concatenate_audio_files(
         os.makedirs(output_dir, exist_ok=True)
 
     # Create a file list for ffmpeg concat demuxer
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         list_path = f.name
         for file in input_files:
             # Escape single quotes in file paths
@@ -126,15 +125,9 @@ def concatenate_audio_files(
             codec = []
 
         subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-f", "concat", "-safe", "0",
-                "-i", list_path,
-                *codec,
-                output_path
-            ],
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, *codec, output_path],
             capture_output=True,
-            check=True
+            check=True,
         )
     finally:
         os.unlink(list_path)
@@ -144,7 +137,7 @@ def create_audiobook_with_chapters(
     input_files: list[str],
     output_path: str,
     chapters: list[ChapterMarker],
-    metadata: Optional[dict] = None
+    metadata: Optional[dict] = None,
 ) -> None:
     """Create an MP3 with chapter markers (ID3v2 chapters)."""
     if not input_files:
@@ -182,22 +175,27 @@ def create_audiobook_with_chapters(
 
             metadata_content += f"\n[CHAPTER]\nTIMEBASE=1/1000\nSTART={start_ms}\nEND={end_ms}\ntitle={chapter.title}\n"
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             metadata_path = f.name
             f.write(metadata_content)
 
         try:
             subprocess.run(
                 [
-                    "ffmpeg", "-y",
-                    "-i", temp_path,
-                    "-i", metadata_path,
-                    "-map_metadata", "1",
-                    "-c", "copy",
-                    output_path
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    temp_path,
+                    "-i",
+                    metadata_path,
+                    "-map_metadata",
+                    "1",
+                    "-c",
+                    "copy",
+                    output_path,
                 ],
                 capture_output=True,
-                check=True
+                check=True,
             )
         finally:
             os.unlink(metadata_path)
@@ -206,11 +204,7 @@ def create_audiobook_with_chapters(
             os.unlink(temp_path)
 
 
-def convert_audio_format(
-    input_path: str,
-    output_path: str,
-    format: str = "mp3"
-) -> None:
+def convert_audio_format(input_path: str, output_path: str, format: str = "mp3") -> None:
     """Convert audio file to a specific format."""
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -229,9 +223,7 @@ def convert_audio_format(
         codec = []
 
     subprocess.run(
-        ["ffmpeg", "-y", "-i", input_path, *codec, output_path],
-        capture_output=True,
-        check=True
+        ["ffmpeg", "-y", "-i", input_path, *codec, output_path], capture_output=True, check=True
     )
 
 
@@ -245,12 +237,7 @@ def normalize_audio(input_path: str, output_path: str) -> None:
         os.makedirs(output_dir, exist_ok=True)
 
     subprocess.run(
-        [
-            "ffmpeg", "-y",
-            "-i", input_path,
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            output_path
-        ],
+        ["ffmpeg", "-y", "-i", input_path, "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", output_path],
         capture_output=True,
-        check=True
+        check=True,
     )

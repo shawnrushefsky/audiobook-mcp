@@ -10,13 +10,16 @@ This MCP server orchestrates audiobook production by managing:
 
 import json
 import atexit
+import uuid
+import threading
+from datetime import datetime
 from typing import Optional, Any
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
+from enum import Enum
 
 from mcp.server.fastmcp import FastMCP
 
 from .db.connection import close_database
-from .db.schema import Project, Character, Chapter, Segment, VoiceSample
 
 # Import tool implementations
 from .tools.projects import (
@@ -24,10 +27,10 @@ from .tools.projects import (
     open_project,
     get_project_info,
     update_project,
+    get_default_project_path,
 )
 from .tools.characters import (
     add_character,
-    list_characters,
     get_character,
     update_character,
     delete_character,
@@ -37,7 +40,6 @@ from .tools.characters import (
 )
 from .tools.chapters import (
     add_chapter,
-    list_chapters,
     get_chapter,
     update_chapter,
     delete_chapter,
@@ -46,7 +48,6 @@ from .tools.chapters import (
 )
 from .tools.segments import (
     add_segment,
-    list_segments,
     get_segment,
     update_segment,
     delete_segment,
@@ -58,11 +59,9 @@ from .tools.segments import (
 from .tools.voice_samples import (
     add_voice_sample,
     list_voice_samples,
-    get_voice_sample,
     update_voice_sample,
     delete_voice_sample,
     clear_voice_samples,
-    reorder_voice_samples,
     get_voice_samples_info,
 )
 from .tools.tts import (
@@ -73,6 +72,7 @@ from .tools.tts import (
     generate_batch_audio,
     download_maya1_models,
     get_model_status,
+    build_voice_description,
 )
 from .tools.import_tools import (
     import_chapter_text,
@@ -99,8 +99,115 @@ atexit.register(close_database)
 
 
 # ============================================================================
+# Async Job Tracking System
+# ============================================================================
+
+
+class JobStatus(Enum):
+    """Status of an async job."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class AsyncJob:
+    """Represents an async job for long-running operations."""
+
+    job_id: str
+    job_type: str
+    status: JobStatus
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    progress: float = 0.0
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    metadata: dict = field(default_factory=dict)
+
+
+# Global job storage
+_jobs: dict[str, AsyncJob] = {}
+_jobs_lock = threading.Lock()
+
+
+def create_job(job_type: str, metadata: Optional[dict] = None) -> AsyncJob:
+    """Create a new async job and return it."""
+    job_id = str(uuid.uuid4())
+    job = AsyncJob(
+        job_id=job_id,
+        job_type=job_type,
+        status=JobStatus.PENDING,
+        created_at=datetime.now(),
+        metadata=metadata or {},
+    )
+    with _jobs_lock:
+        _jobs[job_id] = job
+    return job
+
+
+def get_job(job_id: str) -> Optional[AsyncJob]:
+    """Get a job by ID."""
+    with _jobs_lock:
+        return _jobs.get(job_id)
+
+
+def update_job(
+    job_id: str,
+    status: Optional[JobStatus] = None,
+    progress: Optional[float] = None,
+    result: Optional[dict] = None,
+    error: Optional[str] = None,
+) -> Optional[AsyncJob]:
+    """Update a job's status."""
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job:
+            return None
+
+        if status:
+            job.status = status
+            if status == JobStatus.RUNNING and not job.started_at:
+                job.started_at = datetime.now()
+            elif status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                job.completed_at = datetime.now()
+
+        if progress is not None:
+            job.progress = progress
+
+        if result is not None:
+            job.result = result
+
+        if error is not None:
+            job.error = error
+
+        return job
+
+
+def run_job_async(job: AsyncJob, func, *args, **kwargs):
+    """Run a function asynchronously and update job status."""
+
+    def worker():
+        try:
+            update_job(job.job_id, status=JobStatus.RUNNING)
+            result = func(*args, **kwargs)
+            # Convert dataclass result to dict if needed
+            if hasattr(result, "__dataclass_fields__"):
+                result = asdict(result)
+            update_job(job.job_id, status=JobStatus.COMPLETED, progress=1.0, result=result)
+        except Exception as e:
+            update_job(job.job_id, status=JobStatus.FAILED, error=str(e))
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+
+# ============================================================================
 # Helper functions
 # ============================================================================
+
 
 def to_dict(obj: Any) -> dict:
     """Convert dataclass or object to dict."""
@@ -115,6 +222,21 @@ def to_dict(obj: Any) -> dict:
 # Project Management Tools
 # ============================================================================
 
+
+@mcp.tool()
+def get_suggested_project_path(title: str) -> dict:
+    """Get a suggested project path based on the title.
+
+    Returns a platform-appropriate path in the user's Documents folder.
+    Use this before init_audiobook_project to suggest a default location.
+    """
+    suggested_path = get_default_project_path(title)
+    return {
+        "suggested_path": suggested_path,
+        "title": title,
+    }
+
+
 @mcp.tool()
 def init_audiobook_project(
     path: str,
@@ -125,9 +247,18 @@ def init_audiobook_project(
     """Initialize a new audiobook project in a directory.
 
     Creates .audiobook folder with database and directory structure.
+    The directory will be created if it doesn't exist.
+
+    Tip: Use get_suggested_project_path() first to get a recommended location
+    in the user's Documents folder.
     """
     project = init_project(path, title, author, description)
-    return {"success": True, "message": f'Project "{project.title}" initialized', "project": to_dict(project)}
+    return {
+        "success": True,
+        "message": f'Project "{project.title}" initialized',
+        "project": to_dict(project),
+        "path": path,
+    }
 
 
 @mcp.tool()
@@ -137,7 +268,11 @@ def open_audiobook_project(path: str) -> dict:
     Required before using other project-specific tools.
     """
     project = open_project(path)
-    return {"success": True, "message": f'Project "{project.title}" opened', "project": to_dict(project)}
+    return {
+        "success": True,
+        "message": f'Project "{project.title}" opened',
+        "project": to_dict(project),
+    }
 
 
 @mcp.tool()
@@ -166,6 +301,7 @@ def update_audiobook_project(
 # Character Management Tools
 # ============================================================================
 
+
 @mcp.tool()
 def create_character(
     name: str,
@@ -177,7 +313,11 @@ def create_character(
     Characters can be assigned voices and speak segments.
     """
     character = add_character(name, description, is_narrator)
-    return {"success": True, "message": f'Character "{character.name}" added', "character": to_dict(character)}
+    return {
+        "success": True,
+        "message": f'Character "{character.name}" added',
+        "character": to_dict(character),
+    }
 
 
 @mcp.tool()
@@ -205,7 +345,11 @@ def modify_character(
 ) -> dict:
     """Update an existing character's name, description, or narrator status."""
     character = update_character(character_id, name, description, is_narrator)
-    return {"success": True, "message": f'Character "{character.name}" updated', "character": to_dict(character)}
+    return {
+        "success": True,
+        "message": f'Character "{character.name}" updated',
+        "character": to_dict(character),
+    }
 
 
 @mcp.tool()
@@ -248,12 +392,17 @@ def set_character_voice(
 def clear_character_voice(character_id: str) -> dict:
     """Remove the voice configuration from a character."""
     character = clear_voice(character_id)
-    return {"success": True, "message": f'Voice cleared from "{character.name}"', "character": to_dict(character)}
+    return {
+        "success": True,
+        "message": f'Voice cleared from "{character.name}"',
+        "character": to_dict(character),
+    }
 
 
 # ============================================================================
 # Chapter Management Tools
 # ============================================================================
+
 
 @mcp.tool()
 def create_chapter(title: str, sort_order: Optional[int] = None) -> dict:
@@ -262,7 +411,11 @@ def create_chapter(title: str, sort_order: Optional[int] = None) -> dict:
     Chapters contain segments of text to be narrated.
     """
     chapter = add_chapter(title, sort_order)
-    return {"success": True, "message": f'Chapter "{chapter.title}" added', "chapter": to_dict(chapter)}
+    return {
+        "success": True,
+        "message": f'Chapter "{chapter.title}" added',
+        "chapter": to_dict(chapter),
+    }
 
 
 @mcp.tool()
@@ -276,7 +429,11 @@ def get_chapters() -> dict:
 def modify_chapter(chapter_id: str, title: Optional[str] = None) -> dict:
     """Update a chapter's title."""
     chapter = update_chapter(chapter_id, title)
-    return {"success": True, "message": f'Chapter "{chapter.title}" updated', "chapter": to_dict(chapter)}
+    return {
+        "success": True,
+        "message": f'Chapter "{chapter.title}" updated',
+        "chapter": to_dict(chapter),
+    }
 
 
 @mcp.tool()
@@ -293,12 +450,17 @@ def remove_chapter(chapter_id: str) -> dict:
 def reorder_book_chapters(chapter_ids: list[str]) -> dict:
     """Reorder chapters by providing an array of chapter IDs in the desired order."""
     chapters = reorder_chapters(chapter_ids)
-    return {"success": True, "message": "Chapters reordered", "chapters": [to_dict(c) for c in chapters]}
+    return {
+        "success": True,
+        "message": "Chapters reordered",
+        "chapters": [to_dict(c) for c in chapters],
+    }
 
 
 # ============================================================================
 # Segment Management Tools
 # ============================================================================
+
 
 @mcp.tool()
 def create_segment(
@@ -357,23 +519,97 @@ def get_segments_without_audio() -> dict:
     return {"count": len(segments), "segments": [to_dict(s) for s in segments]}
 
 
+@mcp.tool()
+def bulk_create_segments(chapter_id: str, segments: list[dict]) -> dict:
+    """Add multiple segments to a chapter in one operation.
+
+    Each segment dict should have:
+    - text_content (required): The text for the segment
+    - character_id (optional): ID of the character speaking this segment
+
+    Example:
+    [
+        {"text_content": "Hello, world!", "character_id": "char-123"},
+        {"text_content": "Goodbye, world!"}
+    ]
+    """
+    result = bulk_add_segments(chapter_id, segments)
+    return {
+        "success": True,
+        "message": f"Added {len(result)} segments",
+        "count": len(result),
+        "segments": [to_dict(s) for s in result],
+    }
+
+
 # ============================================================================
 # Voice Sample Management Tools
 # ============================================================================
 
-@mcp.tool()
-def create_voice_sample(
-    character_id: str,
-    text: str,
-    description: Optional[str] = None,
-) -> dict:
-    """Generate a voice sample for a character using Maya1 TTS.
 
-    Creates a reference audio clip for voice cloning with Fish Speech.
-    Recommended: 10-30 seconds of varied speech for best results.
+@mcp.tool()
+def create_voice_samples(
+    character_id: str,
+    voice_description: str,
+    sample_texts: list[str],
+) -> dict:
+    """Generate voice samples for a character using Maya1 TTS.
+
+    Creates reference audio clips for voice cloning with Fish Speech.
+
+    Args:
+        character_id: The character to generate samples for.
+        voice_description: Detailed description of the voice. Be specific about
+            age, gender, accent, pitch, timbre, pacing, and emotional quality.
+            Example: "A gruff male pirate in his 50s with a thick British accent.
+            Deep, gravelly voice with slow deliberate pacing. Speaks with authority
+            and a hint of menace, but can show warmth to trusted crew."
+        sample_texts: List of 3 in-character speech samples (50-100 words each).
+            Each should show a different emotional range:
+            - Sample 1: Calm, measured speech (narration or reflection)
+            - Sample 2: Emotional speech (excitement, anger, urgency)
+            - Sample 3: Conversational speech (casual dialogue)
+
+    Maya1 emotion tags can be included: <laugh>, <sigh>, <gasp>, <angry>, <whisper>
+
+    Example for a pirate captain:
+        voice_description: "A gruff male pirate captain in his 50s with a thick
+            British accent. Deep gravelly voice, slow pacing, commanding presence."
+        sample_texts: [
+            "The sea has been my home for forty years now...",
+            "All hands on deck! <angry> The enemy approaches!...",
+            "You know lad, being a captain is not just about giving orders..."
+        ]
     """
-    result = generate_voice_sample(character_id, text, description)
-    return {"success": True, "message": f'Voice sample generated for "{result["character_name"]}"', **result}
+    if len(sample_texts) != 3:
+        raise ValueError("Exactly 3 sample texts are required for optimal voice cloning")
+
+    results = []
+    for i, text in enumerate(sample_texts):
+        result = generate_voice_sample(character_id, text, voice_description)
+        results.append(result)
+
+    total_duration = sum(r["duration_ms"] for r in results)
+
+    return {
+        "success": True,
+        "message": f'Generated 3 voice samples for "{results[0]["character_name"]}" ({total_duration}ms total)',
+        "character_id": character_id,
+        "character_name": results[0]["character_name"],
+        "voice_description": voice_description,
+        "total_duration_ms": total_duration,
+        "samples": [
+            {
+                "sample_id": r["sample_id"],
+                "sample_path": r["sample_path"],
+                "duration_ms": r["duration_ms"],
+                "text_preview": r["sample_text"][:80] + "..."
+                if len(r["sample_text"]) > 80
+                else r["sample_text"],
+            }
+            for r in results
+        ],
+    }
 
 
 @mcp.tool()
@@ -420,7 +656,11 @@ def remove_voice_sample(sample_id: str) -> dict:
 def remove_all_voice_samples(character_id: str) -> dict:
     """Delete all voice samples for a character."""
     result = clear_voice_samples(character_id)
-    return {"success": True, "message": f'Deleted {result["deleted_count"]} voice samples', **result}
+    return {
+        "success": True,
+        "message": f"Deleted {result['deleted_count']} voice samples",
+        **result,
+    }
 
 
 @mcp.tool()
@@ -440,6 +680,7 @@ def get_voice_samples_summary(character_id: str) -> dict:
 # TTS Tools
 # ============================================================================
 
+
 @mcp.tool()
 def check_tts_availability() -> dict:
     """Check if TTS engines (Maya1, Fish Speech) are available and properly configured."""
@@ -451,6 +692,35 @@ def check_tts_availability() -> dict:
 def get_tts_info() -> dict:
     """List available TTS engines, emotion tags, voice presets, and description format."""
     return list_tts_info()
+
+
+@mcp.tool()
+def create_voice_description(
+    gender: str = "female",
+    age: str = "30s",
+    accent: str = "american",
+    pitch: str = "medium",
+    timbre: str = "warm",
+    pacing: str = "measured",
+    tone: str = "professional",
+) -> dict:
+    """Build a Maya1 voice description from individual parameters.
+
+    Creates a properly formatted voice description string. Maya1 understands
+    natural language, so any descriptive terms work - the suggestions below
+    are just common values.
+
+    Suggestions (not strict - use any descriptive terms):
+    - gender: male, female (or any descriptive term)
+    - age: 10s, 20s, 30s, 40s, 50s, 60s, 70s (or "elderly", "teenage", etc.)
+    - accent: american, british, australian, irish, scottish, indian (or any accent)
+    - pitch: low, medium-low, medium, medium-high, high
+    - timbre: warm, cold, bright, gravelly, gentle, strong, smooth, husky
+    - pacing: slow, measured, moderate, energetic, fast
+    - tone: professional, friendly, menacing, wise, enthusiastic, mysterious, warm, determined, calm, excited
+    """
+    result = build_voice_description(gender, age, accent, pitch, timbre, pacing, tone)
+    return to_dict(result)
 
 
 @mcp.tool()
@@ -480,21 +750,139 @@ def download_tts_models(force: bool = False) -> dict:
 def generate_audio_for_segment(
     segment_id: str,
     description: Optional[str] = None,
-    engine: str = "maya1",
+    engine: str = "chatterbox",
+    run_async: bool = True,
 ) -> dict:
     """Generate audio for a single segment using TTS.
 
-    Supports Maya1 (voice design) or Fish Speech (voice cloning).
-    Maya1: Uses description or character's voice config.
-    Fish Speech: Requires character to have voice samples.
+    Recommended workflow:
+    1. Use Maya1 to create voice samples for each character (create_voice_samples)
+    2. Use Chatterbox for all segment audio generation (this tool with engine="chatterbox")
+
+    Engines:
+    - chatterbox (default, recommended): Voice cloning with emotion control ([laugh], [cough], etc.)
+    - fish_speech: High-quality voice cloning (requires CUDA or cloud API)
+    - maya1: Direct voice design from description (useful for one-off samples)
+
+    Args:
+        segment_id: The segment to generate audio for.
+        description: Voice description (for maya1 engine).
+        engine: TTS engine to use.
+        run_async: If True (default), runs generation in background and returns job_id.
+                   Use get_job_status to check progress. If False, blocks until complete.
     """
-    result = generate_segment_audio(segment_id, description, engine)
-    return {"success": True, "message": "Audio generated for segment", **to_dict(result)}
+    if run_async:
+        # Create async job and run in background
+        job = create_job(
+            job_type="generate_audio",
+            metadata={"segment_id": segment_id, "engine": engine},
+        )
+        run_job_async(job, generate_segment_audio, segment_id, description, engine)
+        return {
+            "success": True,
+            "async": True,
+            "job_id": job.job_id,
+            "message": f"Audio generation started (job {job.job_id}). Use get_job_status to check progress.",
+        }
+    else:
+        # Run synchronously (may timeout for long audio)
+        result = generate_segment_audio(segment_id, description, engine)
+        return {
+            "success": True,
+            "async": False,
+            "message": "Audio generated for segment",
+            **to_dict(result),
+        }
+
+
+@mcp.tool()
+def get_job_status(job_id: str) -> dict:
+    """Get the status of an async job.
+
+    Returns job status, progress, and result (if completed).
+    Use this to check on audio generation jobs.
+    """
+    job = get_job(job_id)
+    if not job:
+        raise ValueError(f"Job not found: {job_id}")
+
+    response = {
+        "job_id": job.job_id,
+        "job_type": job.job_type,
+        "status": job.status.value,
+        "progress": job.progress,
+        "created_at": job.created_at.isoformat(),
+        "metadata": job.metadata,
+    }
+
+    if job.started_at:
+        response["started_at"] = job.started_at.isoformat()
+
+    if job.completed_at:
+        response["completed_at"] = job.completed_at.isoformat()
+
+    if job.status == JobStatus.COMPLETED and job.result:
+        response["result"] = job.result
+
+    if job.status == JobStatus.FAILED and job.error:
+        response["error"] = job.error
+
+    return response
+
+
+@mcp.tool()
+def list_jobs(
+    status: Optional[str] = None,
+    job_type: Optional[str] = None,
+    limit: int = 20,
+) -> dict:
+    """List async jobs, optionally filtered by status or type.
+
+    Args:
+        status: Filter by status ('pending', 'running', 'completed', 'failed').
+        job_type: Filter by job type (e.g., 'generate_audio').
+        limit: Maximum number of jobs to return (default 20).
+    """
+    with _jobs_lock:
+        jobs = list(_jobs.values())
+
+    # Apply filters
+    if status:
+        try:
+            filter_status = JobStatus(status)
+            jobs = [j for j in jobs if j.status == filter_status]
+        except ValueError:
+            raise ValueError(f"Invalid status: {status}. Use: pending, running, completed, failed")
+
+    if job_type:
+        jobs = [j for j in jobs if j.job_type == job_type]
+
+    # Sort by created_at descending (newest first)
+    jobs.sort(key=lambda j: j.created_at, reverse=True)
+
+    # Apply limit
+    jobs = jobs[:limit]
+
+    return {
+        "count": len(jobs),
+        "jobs": [
+            {
+                "job_id": j.job_id,
+                "job_type": j.job_type,
+                "status": j.status.value,
+                "progress": j.progress,
+                "created_at": j.created_at.isoformat(),
+                "metadata": j.metadata,
+            }
+            for j in jobs
+        ],
+    }
 
 
 # ============================================================================
 # Import Tools
 # ============================================================================
+
 
 @mcp.tool()
 def import_text_to_chapter(
@@ -502,15 +890,22 @@ def import_text_to_chapter(
     text: str,
     default_character_id: Optional[str] = None,
 ) -> dict:
-    """Import prose text into a chapter, automatically splitting into segments.
+    """Import screenplay-format text into a chapter.
 
-    Detects dialogue (quoted text) and narration, assigning the default character
-    to narration segments. Returns detected character names for dialogue assignment.
+    Expected format:
+        CHARACTER NAME: Dialogue or narration text here.
+
+        NARRATOR: The scene description.
+
+        CAPTAIN BLACKBEARD: Arr, me hearties!
+
+    Character names in the script are matched (case-insensitive) to existing
+    characters in the project. Unmatched names result in unassigned segments.
     """
     result = import_chapter_text(chapter_id, text, default_character_id)
     return {
         "success": True,
-        "message": f"Created {result.segments_created} segments",
+        "message": f"Created {result.segments_created} segments ({result.assigned_segments} assigned, {result.unassigned_segments} unassigned)",
         **to_dict(result),
     }
 
@@ -582,6 +977,7 @@ def get_character_line_distribution() -> dict:
 # ============================================================================
 # Audio Registration & Stitching Tools
 # ============================================================================
+
 
 @mcp.tool()
 def register_audio_for_segment(
@@ -683,12 +1079,16 @@ def clear_audio_from_segment(segment_id: str) -> dict:
 def generate_batch_segment_audio(
     segment_ids: Optional[list[str]] = None,
     chapter_id: Optional[str] = None,
-    engine: str = "fish_speech",
+    engine: str = "chatterbox",
 ) -> dict:
     """Generate audio for multiple segments in batch.
 
     Either provide a list of segment_ids or a chapter_id to process all segments in a chapter.
-    Fish Speech is recommended for batch generation (faster for long-form content).
+
+    Engines:
+    - chatterbox (default): Voice cloning with emotion control
+    - fish_speech: Voice cloning for CUDA or cloud API
+    - maya1: Direct voice design from description
     """
     result = generate_batch_audio(segment_ids, chapter_id, engine)
     return {
@@ -701,6 +1101,7 @@ def generate_batch_segment_audio(
 # ============================================================================
 # Main Entry Point
 # ============================================================================
+
 
 def main():
     """Run the Audiobook MCP server."""
