@@ -120,7 +120,7 @@ class MiraTTSTransformers:
             )
 
         # Decode the generated tokens (skip input tokens)
-        generated_tokens = outputs[0][inputs["input_ids"].shape[1]:]
+        generated_tokens = outputs[0][inputs["input_ids"].shape[1] :]
         generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
         # Convert to audio using codec
@@ -138,6 +138,7 @@ def _load_model():
     # Try lmdeploy first (faster), fall back to transformers
     try:
         from mira.model import MiraTTS
+
         device, device_name, _ = get_best_device()
         print(f"Loading MiraTTS (lmdeploy) on {device}...", file=sys.stderr, flush=True)
         _model = MiraTTS(MODEL_ID)
@@ -198,11 +199,13 @@ class MiraEngine(AudioPromptedEngine):
     def is_available(self) -> bool:
         try:
             import torch
+
             # ncodec (FastBiCodec) hardcodes CUDA - it won't work without it
             if not torch.cuda.is_available():
                 return False
             # Check for codec (required)
             from ncodec.codec import TTSCodec  # noqa: F401
+
             # Check for transformers (fallback) or lmdeploy (fast)
             try:
                 from mira.model import MiraTTS  # noqa: F401
