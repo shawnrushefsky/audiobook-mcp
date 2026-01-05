@@ -59,7 +59,9 @@ CHATTERBOX_TAGS = [
 
 
 # Default voice description for Maya1 when none specified
-DEFAULT_DESCRIPTION = "Female narrator in her 30s with American accent, warm timbre, measured pacing"
+DEFAULT_DESCRIPTION = (
+    "Female narrator in her 30s with American accent, warm timbre, measured pacing"
+)
 SAMPLE_RATE = 24000
 
 # Maya1 SNAC token format constants
