@@ -1,7 +1,7 @@
 [project]
 name = "talky-talky"
 version = "0.2.0"
-description = "MCP server for orchestrating full-cast audiobook production with AI voice synthesis"
+description = "Text-to-Speech MCP server with pluggable engine support for AI agents"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

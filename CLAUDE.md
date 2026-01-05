@@ -4,10 +4,12 @@ This document provides context for Claude Code and other AI assistants working o
 
 ## Project Overview
 
-Talky Talky is a Model Context Protocol (MCP) server that orchestrates full-cast audiobook production. It manages the organization of voices, characters, chapters, and segments, with **native TTS capabilities**:
+Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speech capabilities for AI agents. It features a pluggable engine architecture supporting multiple TTS backends:
 
-- **Maya1**: Text-guided voice design with 20+ emotion tags (creates unique voices from descriptions)
-- **Fish Speech**: High-quality voice cloning from reference audio samples
+- **Maya1**: Text-prompted voice design - create unique voices from natural language descriptions
+- **Chatterbox**: Audio-prompted voice cloning - clone voices from reference audio samples
+
+Plus audio utilities for format conversion, concatenation, and normalization.
 
 ## Architecture
 
@@ -15,11 +17,10 @@ Talky Talky is a Model Context Protocol (MCP) server that orchestrates full-cast
 
 - **Runtime**: Python 3.10+
 - **MCP SDK**: `mcp` with FastMCP for server implementation
-- **Database**: SQLite (per-project databases)
-- **Audio Processing**: ffmpeg for audio stitching and format conversion
+- **Audio Processing**: ffmpeg for format conversion and concatenation
 - **TTS Engines**:
   - Maya1 (local, requires GPU) - voice design from text descriptions
-  - Fish Speech (local server or cloud API) - voice cloning from samples
+  - Chatterbox (local) - voice cloning from reference audio
 
 ### Directory Structure
 
@@ -27,51 +28,132 @@ Talky Talky is a Model Context Protocol (MCP) server that orchestrates full-cast
 talky_talky/
 ├── __init__.py
 ├── server.py             # MCP server entry point, tool registrations
-├── db/
-│   ├── __init__.py
-│   ├── connection.py     # SQLite connection management (singleton per project)
-│   └── schema.py         # Table definitions and dataclasses
 ├── tools/
 │   ├── __init__.py
-│   ├── projects.py       # Project CRUD operations
-│   ├── characters.py     # Character management
-│   ├── chapters.py       # Chapter management
-│   ├── segments.py       # Segment management
-│   ├── voice_samples.py  # Voice sample storage for cloning
-│   ├── import_tools.py   # Text import and dialogue detection
-│   ├── audio.py          # Audio registration and stitching
-│   └── tts.py            # TTS with Maya1 and Fish Speech
+│   ├── audio.py          # Audio utilities (convert, concat, info)
+│   └── tts/
+│       ├── __init__.py   # Public interface, engine registry
+│       ├── base.py       # Abstract engine interfaces
+│       ├── utils.py      # Shared utilities (chunking, tag conversion)
+│       ├── maya1.py      # Maya1 engine implementation
+│       └── chatterbox.py # Chatterbox engine implementation
 └── utils/
     ├── __init__.py
-    ├── parser.py         # Text parsing utilities (dialogue detection)
     └── ffmpeg.py         # ffmpeg wrapper functions
 ```
 
-### Data Model
+### Engine Architecture
 
+The TTS module uses a pluggable engine architecture:
+
+```python
+# Base classes in base.py
+TTSEngine           # Abstract base for all engines
+VoiceDesignEngine   # For text-prompted engines (Maya1)
+VoiceCloningEngine  # For audio-prompted engines (Chatterbox)
+
+# Registry in __init__.py
+register_engine(MyEngine)  # Register new engines
+get_engine("maya1")        # Get engine by ID
+generate(text, output, engine="maya1", **kwargs)  # Unified generation
 ```
-Project (1) ←→ (N) Characters
-Project (1) ←→ (N) Chapters
-Chapter (1) ←→ (N) Segments
-Segment (N) ←→ (1) Character (nullable)
-Character (1) ←→ (N) VoiceSamples
+
+### Adding New TTS Engines
+
+1. Create a new file in `talky_talky/tools/tts/` (e.g., `elevenlabs.py`)
+2. Implement the appropriate base class:
+
+```python
+from .base import VoiceDesignEngine, TTSResult, EngineInfo
+
+class ElevenLabsEngine(VoiceDesignEngine):
+    @property
+    def name(self) -> str:
+        return "ElevenLabs"
+
+    @property
+    def engine_id(self) -> str:
+        return "elevenlabs"
+
+    def is_available(self) -> bool:
+        # Check if dependencies are installed
+        try:
+            import elevenlabs
+            return True
+        except ImportError:
+            return False
+
+    def get_info(self) -> EngineInfo:
+        return EngineInfo(
+            name=self.name,
+            engine_type="voice_design",
+            description="Cloud-based voice synthesis",
+            # ... other fields
+        )
+
+    def generate(self, text, output_path, **kwargs) -> TTSResult:
+        # Implementation
+        pass
 ```
 
-- **Project**: Top-level container with metadata (title, author)
-- **Character**: A speaking role with voice configuration
-- **Chapter**: A chapter containing ordered segments
-- **Segment**: A piece of text to be spoken, optionally assigned to a character
-- **VoiceSample**: Reference audio for voice cloning (multiple per character)
+3. Register in `__init__.py`:
+```python
+from .elevenlabs import ElevenLabsEngine
+register_engine(ElevenLabsEngine)
+```
 
-### Key Design Decisions
+## MCP Tools
 
-1. **Per-Project Storage**: Each project has its own `.audiobook/` folder containing the SQLite database and audio files. This makes projects portable and self-contained.
+### TTS Engine Tools
+- `check_tts_availability` - Check engine status and device info
+- `get_tts_engines_info` - Get detailed info about all engines
+- `list_available_engines` - List installed engines
+- `get_tts_model_status` - Check Maya1 model download status
+- `download_tts_models` - Download Maya1 models
 
-2. **Voice Provider Agnostic**: Voice configurations are stored as JSON with `provider`, `voice_ref`, and optional `settings`. This allows integration with any TTS service.
+### Speech Generation Tools
+- `speak_maya1` - Generate speech with voice description
+- `speak_chatterbox` - Generate speech with voice cloning
 
-3. **Voice Cloning Workflow**: Use Maya1 to create voice samples from descriptions, then use Chatterbox to clone those voices for long-form generation.
+### Audio Utility Tools
+- `get_audio_file_info` - Get audio file info (duration, format, size)
+- `convert_audio_format` - Convert between formats (wav, mp3, m4a)
+- `join_audio_files` - Concatenate multiple audio files
+- `normalize_audio_levels` - Normalize to broadcast standard
+- `check_ffmpeg_available` - Check ffmpeg installation
 
-4. **Single Active Project**: The server maintains one open project at a time via the connection singleton.
+## TTS Engines
+
+### Maya1 (Voice Design)
+
+Creates unique voices from natural language descriptions with inline emotion tags.
+
+**Requirements:**
+- Python 3.10+
+- CUDA GPU with 16GB+ VRAM (best), or MPS (Apple Silicon), or CPU (slow)
+- ~10GB disk space for model weights
+
+**Emotion Tags:** `<laugh>`, `<sigh>`, `<gasp>`, `<whisper>`, `<angry>`, `<excited>`, etc.
+
+**Voice Description Example:**
+```
+"Gruff male pirate, 50s, British accent, low pitch, gravelly, slow pacing"
+```
+
+### Chatterbox (Voice Cloning)
+
+Clones voices from reference audio with emotion control.
+
+**Installation:**
+```bash
+pip install chatterbox-tts
+```
+
+**Parameters:**
+- `exaggeration`: 0.0-1.0+, controls expressiveness (default 0.5)
+- `cfg_weight`: 0.0-1.0, controls pacing (default 0.5)
+
+**Emotion Tags:** `[laugh]`, `[chuckle]`, `[cough]`, `[sigh]`
 
 ## Installation & Setup
 
@@ -102,143 +184,7 @@ talky-talky
 python -m talky_talky.server
 ```
 
-## Adding New Tools
-
-1. **Implement business logic** in appropriate `talky_talky/tools/*.py` file:
-   ```python
-   from ..db.connection import get_database
-   from dataclasses import dataclass
-
-   @dataclass
-   class MyResult:
-       value: str
-
-   def my_function(param: str) -> MyResult:
-       db = get_database()
-       cursor = db.cursor()
-       # Implementation
-       return MyResult(value="result")
-   ```
-
-2. **Register MCP tool** in `talky_talky/server.py`:
-   ```python
-   from .tools.my_module import my_function
-
-   @mcp.tool()
-   def my_tool(param: str) -> dict:
-       """Description of what this tool does."""
-       result = my_function(param)
-       return {"success": True, **to_dict(result)}
-   ```
-
-## Common Patterns
-
-### Database Access
-
-```python
-from ..db.connection import get_database
-
-def my_function():
-    db = get_database()  # Throws if no project open
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM table WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    return row
-```
-
-### Error Handling
-
-FastMCP handles errors automatically. Raise exceptions and they'll be returned as error responses:
-
-```python
-@mcp.tool()
-def my_tool(param: str) -> dict:
-    if not param:
-        raise ValueError("param is required")
-    # ...
-```
-
-### File Paths
-
-- Store relative paths in database (e.g., `audio/segments/abc.mp3`)
-- Use `get_audiobook_dir()` to get absolute paths when needed
-- Always validate file existence before operations
-
-## Audio Processing
-
-The `talky_talky/utils/ffmpeg.py` module wraps ffmpeg commands:
-
-- `check_ffmpeg()` - Verify ffmpeg is available
-- `get_audio_duration()` - Get duration in milliseconds
-- `validate_audio_file()` - Check file is valid audio
-- `concatenate_audio_files()` - Join multiple audio files
-- `create_audiobook_with_chapters()` - Create MP3 with ID3 chapter markers
-
-## TTS Engines
-
-### Maya1 (Voice Design)
-
-Maya1 creates unique voices from natural language descriptions with 20+ inline emotion tags.
-
-**Requirements:**
-- Python 3.10+
-- CUDA GPU with 16GB+ VRAM (RTX 4090, A100, H100)
-- ~10GB disk space for model weights
-
-**Emotion Tags:**
-```
-<laugh> <laugh_harder> <chuckle> <giggle> <snort>
-<cry> <sob> <sigh> <gasp> <groan>
-<whisper> <angry> <yell> <scream>
-<cough> <clear_throat> <sniff> <hum> <mumble> <stutter>
-```
-
-**Voice Description Format:**
-```
-"Realistic [gender] voice in the [age]s age with [accent] accent. [pitch] pitch, [timbre] timbre, [pacing] pacing, [tone] tone."
-```
-
-**Options:**
-- Gender: male, female
-- Age: 10s, 20s, 30s, 40s, 50s, 60s, 70s
-- Accent: american, british, australian, indian
-- Pitch: low, medium-low, medium, medium-high, high
-- Timbre: warm, bright, gravelly, smooth, cold, gentle, strong
-- Pacing: slow, measured, moderate, energetic, fast
-- Tone: professional, conversational, enthusiastic, wise, menacing, warm, determined
-
-### Chatterbox (Voice Cloning)
-
-Chatterbox clones voices from reference audio samples with emotion control. Supports paralinguistic tags like [laugh], [cough], [chuckle] for expressive speech.
-
-**Installation:**
-```bash
-pip install chatterbox-tts
-```
-
-**Parameters:**
-- `exaggeration`: 0.0-1.0, controls expressiveness (default 0.5)
-- `cfg_weight`: Controls pacing, lower = slower (default 0.5)
-
-### Recommended Workflow
-
-1. **Create voice samples with Maya1**: Generate 10-30 seconds of reference audio for each character using voice descriptions
-2. **Clone voices with Chatterbox**: Use the samples to clone the voice for long-form generation
-3. **Generate segment audio**: Use Chatterbox to generate audio for all dialogue segments
-4. **Stitch audiobook**: Combine all segments into chapters and the final audiobook
-
 ## Debugging
 
 - The server logs to stderr (stdout is reserved for MCP protocol)
 - Use `print(..., file=sys.stderr)` for debug logging
-- Check `.audiobook/db.sqlite` directly for database state
-
-## Testing
-
-```bash
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=talky_talky
-```

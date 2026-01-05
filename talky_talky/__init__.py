@@ -1,3 +1,3 @@
-"""Talky Talky - Full-cast audiobook production with AI voice synthesis."""
+"""Talky Talky - Text-to-Speech MCP Server with pluggable engine support."""
 
 __version__ = "0.2.0"
