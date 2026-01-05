@@ -1,11 +1,11 @@
-"""Shared fixtures for audiobook-mcp tests."""
+"""Shared fixtures for talky-talky tests."""
 
 import shutil
 import tempfile
 
 import pytest
 
-from audiobook_mcp.db.connection import close_database
+from talky_talky.db.connection import close_database
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def temp_project_dir():
 @pytest.fixture
 def initialized_project(temp_project_dir):
     """Create a temporary initialized project."""
-    from audiobook_mcp.tools.projects import init_project
+    from talky_talky.tools.projects import init_project
 
     project = init_project(temp_project_dir, "Test Project", "Test Author", "Test Description")
     yield {"path": temp_project_dir, "project": project}
@@ -31,7 +31,7 @@ def initialized_project(temp_project_dir):
 @pytest.fixture
 def project_with_characters(initialized_project):
     """Create a project with some characters."""
-    from audiobook_mcp.tools.characters import add_character
+    from talky_talky.tools.characters import add_character
 
     narrator = add_character("Narrator", "The story narrator", is_narrator=True)
     alice = add_character("Alice", "The protagonist")
@@ -46,8 +46,8 @@ def project_with_characters(initialized_project):
 @pytest.fixture
 def project_with_chapters(project_with_characters):
     """Create a project with chapters and segments."""
-    from audiobook_mcp.tools.chapters import add_chapter
-    from audiobook_mcp.tools.segments import add_segment
+    from talky_talky.tools.chapters import add_chapter
+    from talky_talky.tools.segments import add_segment
 
     chapter1 = add_chapter("Chapter 1: The Beginning")
     chapter2 = add_chapter("Chapter 2: The Middle")

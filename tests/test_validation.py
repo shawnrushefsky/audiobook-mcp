@@ -8,7 +8,7 @@ class TestCharacterValidation:
 
     def test_empty_character_name_rejected(self, initialized_project):
         """Test that empty character name is rejected."""
-        from audiobook_mcp.server import create_character
+        from talky_talky.server import create_character
 
         with pytest.raises(ValueError, match="cannot be empty"):
             create_character("")
@@ -18,7 +18,7 @@ class TestCharacterValidation:
 
     def test_long_character_name_rejected(self, initialized_project):
         """Test that overly long character name is rejected."""
-        from audiobook_mcp.server import create_character
+        from talky_talky.server import create_character
 
         long_name = "A" * 201
         with pytest.raises(ValueError, match="cannot exceed 200"):
@@ -30,7 +30,7 @@ class TestChapterValidation:
 
     def test_empty_chapter_title_rejected(self, initialized_project):
         """Test that empty chapter title is rejected."""
-        from audiobook_mcp.server import create_chapter
+        from talky_talky.server import create_chapter
 
         with pytest.raises(ValueError, match="cannot be empty"):
             create_chapter("")
@@ -40,7 +40,7 @@ class TestChapterValidation:
 
     def test_long_chapter_title_rejected(self, initialized_project):
         """Test that overly long chapter title is rejected."""
-        from audiobook_mcp.server import create_chapter
+        from talky_talky.server import create_chapter
 
         long_title = "A" * 501
         with pytest.raises(ValueError, match="cannot exceed 500"):
@@ -52,7 +52,7 @@ class TestSegmentValidation:
 
     def test_empty_segment_text_rejected(self, project_with_chapters):
         """Test that empty segment text is rejected."""
-        from audiobook_mcp.server import create_segment
+        from talky_talky.server import create_segment
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
 
@@ -64,14 +64,14 @@ class TestSegmentValidation:
 
     def test_empty_chapter_id_rejected(self, initialized_project):
         """Test that empty chapter ID is rejected."""
-        from audiobook_mcp.server import create_segment
+        from talky_talky.server import create_segment
 
         with pytest.raises(ValueError, match="chapter_id is required"):
             create_segment("", "Some text")
 
     def test_long_segment_text_rejected(self, project_with_chapters):
         """Test that overly long segment text is rejected."""
-        from audiobook_mcp.server import create_segment
+        from talky_talky.server import create_segment
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
         long_text = "A" * 50001
@@ -85,7 +85,7 @@ class TestBulkSegmentValidation:
 
     def test_empty_segments_list_rejected(self, project_with_chapters):
         """Test that empty segments list is rejected."""
-        from audiobook_mcp.server import bulk_create_segments
+        from talky_talky.server import bulk_create_segments
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
 
@@ -94,7 +94,7 @@ class TestBulkSegmentValidation:
 
     def test_too_many_segments_rejected(self, project_with_chapters):
         """Test that too many segments in one call is rejected."""
-        from audiobook_mcp.server import bulk_create_segments
+        from talky_talky.server import bulk_create_segments
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
         segments = [{"text_content": f"Segment {i}"} for i in range(1001)]
@@ -104,7 +104,7 @@ class TestBulkSegmentValidation:
 
     def test_segment_without_text_rejected(self, project_with_chapters):
         """Test that segment without text_content is rejected."""
-        from audiobook_mcp.server import bulk_create_segments
+        from talky_talky.server import bulk_create_segments
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
         segments = [{"text_content": "Valid"}, {"character_id": "some-id"}]  # Missing text_content
@@ -118,7 +118,7 @@ class TestImportValidation:
 
     def test_empty_import_text_rejected(self, project_with_chapters):
         """Test that empty import text is rejected."""
-        from audiobook_mcp.server import import_text_to_chapter
+        from talky_talky.server import import_text_to_chapter
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
 
@@ -127,7 +127,7 @@ class TestImportValidation:
 
     def test_long_import_text_rejected(self, project_with_chapters):
         """Test that overly long import text is rejected."""
-        from audiobook_mcp.server import import_text_to_chapter
+        from talky_talky.server import import_text_to_chapter
 
         chapter_id = project_with_chapters["chapters"]["chapter1"].id
         long_text = "NARRATOR: " + "A" * 500001

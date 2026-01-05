@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 
-from audiobook_mcp.server import (
+from talky_talky.server import (
     create_job,
     get_job,
     enqueue_job,

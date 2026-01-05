@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from audiobook_mcp.tools.projects import init_project, get_project_info, update_project
+from talky_talky.tools.projects import init_project, get_project_info, update_project
 
 
 class TestProjectInitialization:

@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "audiobook-mcp": {
+    "talky-talky": {
       "command": "uv",
-      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "audiobook-mcp"]
+      "args": ["run", "--directory", ".", "--extra", "maya1", "--extra", "chatterbox", "talky-talky"]
     }
   }
 }

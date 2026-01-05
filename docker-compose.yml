@@ -1,6 +1,6 @@
-# Docker Compose for Audiobook MCP with Fish Speech TTS
+# Docker Compose for Talky Talky with Fish Speech TTS
 #
-# This configuration runs both the audiobook-mcp server and the Fish Speech
+# This configuration runs both the talky-talky server and the Fish Speech
 # inference server together. Use this when you want voice cloning capabilities
 # without needing the Fish Audio cloud API.
 #
@@ -11,7 +11,7 @@
 #   # For CPU only (slower):
 #   docker compose --profile cpu up -d
 #
-# The audiobook-mcp service is configured to connect to Fish Speech at
+# The talky-talky service is configured to connect to Fish Speech at
 # http://fish-speech:8080 automatically.
 
 services:
@@ -56,12 +56,12 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # Audiobook MCP server
+  # Talky Talky MCP server
   # Note: MCP servers communicate via stdio, so this is primarily useful
   # for building the image. For actual use, run with docker run -i.
-  audiobook-mcp:
+  talky-talky:
     build: .
-    image: audiobook-mcp:latest
+    image: talky-talky:latest
     profiles: ["build"]
     environment:
       - FISH_SPEECH_API_URL=http://fish-speech:8080

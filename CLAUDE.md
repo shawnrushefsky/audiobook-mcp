@@ -1,10 +1,10 @@
-# Audiobook MCP - Development Guide
+# Talky Talky - Development Guide
 
 This document provides context for Claude Code and other AI assistants working on this codebase.
 
 ## Project Overview
 
-Audiobook MCP is a Model Context Protocol (MCP) server that orchestrates full-cast audiobook production. It manages the organization of voices, characters, chapters, and segments, with **native TTS capabilities**:
+Talky Talky is a Model Context Protocol (MCP) server that orchestrates full-cast audiobook production. It manages the organization of voices, characters, chapters, and segments, with **native TTS capabilities**:
 
 - **Maya1**: Text-guided voice design with 20+ emotion tags (creates unique voices from descriptions)
 - **Fish Speech**: High-quality voice cloning from reference audio samples
@@ -24,7 +24,7 @@ Audiobook MCP is a Model Context Protocol (MCP) server that orchestrates full-ca
 ### Directory Structure
 
 ```
-audiobook_mcp/
+talky_talky/
 ├── __init__.py
 ├── server.py             # MCP server entry point, tool registrations
 ├── db/
@@ -96,15 +96,15 @@ pip install -e ".[dev]"
 
 ```bash
 # Run the MCP server (communicates via stdio)
-audiobook-mcp
+talky-talky
 
 # Or run directly
-python -m audiobook_mcp.server
+python -m talky_talky.server
 ```
 
 ## Adding New Tools
 
-1. **Implement business logic** in appropriate `audiobook_mcp/tools/*.py` file:
+1. **Implement business logic** in appropriate `talky_talky/tools/*.py` file:
    ```python
    from ..db.connection import get_database
    from dataclasses import dataclass
@@ -120,7 +120,7 @@ python -m audiobook_mcp.server
        return MyResult(value="result")
    ```
 
-2. **Register MCP tool** in `audiobook_mcp/server.py`:
+2. **Register MCP tool** in `talky_talky/server.py`:
    ```python
    from .tools.my_module import my_function
 
@@ -166,7 +166,7 @@ def my_tool(param: str) -> dict:
 
 ## Audio Processing
 
-The `audiobook_mcp/utils/ffmpeg.py` module wraps ffmpeg commands:
+The `talky_talky/utils/ffmpeg.py` module wraps ffmpeg commands:
 
 - `check_ffmpeg()` - Verify ffmpeg is available
 - `get_audio_duration()` - Get duration in milliseconds
@@ -240,5 +240,5 @@ pip install chatterbox-tts
 pytest
 
 # Run with coverage
-pytest --cov=audiobook_mcp
+pytest --cov=talky_talky
 ```

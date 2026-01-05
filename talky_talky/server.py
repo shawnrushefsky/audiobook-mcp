@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audiobook MCP Server - Full-cast audiobook production with AI voice synthesis.
+"""Talky Talky Server - Full-cast audiobook production with AI voice synthesis.
 
 This MCP server orchestrates audiobook production by managing:
 - Projects, characters, chapters, and segments
@@ -101,7 +101,7 @@ from .tools.audio import (
 __version__ = "0.2.0"
 
 # Create MCP server
-mcp = FastMCP("Audiobook MCP")
+mcp = FastMCP("Talky Talky")
 
 # Register cleanup on exit
 atexit.register(close_database)
@@ -1737,7 +1737,7 @@ def generate_batch_segment_audio(
 
 
 def main():
-    """Run the Audiobook MCP server."""
+    """Run the Talky Talky server."""
     mcp.run()
 
 

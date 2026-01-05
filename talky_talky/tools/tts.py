@@ -163,7 +163,7 @@ class PackageManagerInfo:
     has_pip: bool = False
     python_version: str = ""
     install_command: str = "pip install"  # Best command to use
-    extra_install_command: str = "pip install 'audiobook-mcp[maya1]'"
+    extra_install_command: str = "pip install 'talky-talky[maya1]'"
 
 
 def detect_package_manager() -> PackageManagerInfo:
@@ -192,13 +192,13 @@ def detect_package_manager() -> PackageManagerInfo:
     # Determine best install command
     if info.has_uv:
         info.install_command = "uv pip install"
-        info.extra_install_command = "uv pip install 'audiobook-mcp[maya1]'"
+        info.extra_install_command = "uv pip install 'talky-talky[maya1]'"
     elif info.has_pip:
         info.install_command = "pip install"
-        info.extra_install_command = "pip install 'audiobook-mcp[maya1]'"
+        info.extra_install_command = "pip install 'talky-talky[maya1]'"
     else:
         info.install_command = "python -m pip install"
-        info.extra_install_command = "python -m pip install 'audiobook-mcp[maya1]'"
+        info.extra_install_command = "python -m pip install 'talky-talky[maya1]'"
 
     return info
 
@@ -230,7 +230,7 @@ MAYA1_SETUP_INSTRUCTIONS = """
 Maya1 requires PyTorch and related dependencies. Install with:
 
 ```bash
-pip install "audiobook-mcp[maya1]"
+pip install "talky-talky[maya1]"
 ```
 
 Or manually:
@@ -457,8 +457,8 @@ def get_model_status() -> dict:
         if all_downloaded
         else (
             "Use the download_tts_models tool to download missing models, "
-            "or run: pip install audiobook-mcp[maya1] && python -c "
-            "'from audiobook_mcp.tools.tts import download_maya1_models; download_maya1_models()'"
+            "or run: pip install talky-talky[maya1] && python -c "
+            "'from talky_talky.tools.tts import download_maya1_models; download_maya1_models()'"
         ),
     }
 

@@ -1,4 +1,4 @@
-# Audiobook MCP
+# Talky Talky
 
 An MCP (Model Context Protocol) server for orchestrating full-cast audiobook production with AI voice synthesis. Manage voice assignments, organize characters, import prose text, generate audio with built-in TTS engines, and stitch audio files into complete audiobooks—all through a standardized interface that works with any MCP-compatible client.
 
@@ -25,8 +25,8 @@ An MCP (Model Context Protocol) server for orchestrating full-cast audiobook pro
 ### Install from Source
 
 ```bash
-git clone https://github.com/shawnrushefsky/audiobook-mcp.git
-cd audiobook-mcp
+git clone https://github.com/shawnrushefsky/talky-talky.git
+cd talky-talky
 
 # Basic installation
 pip install -e .
@@ -47,14 +47,14 @@ pip install -e ".[dev]"
 ### Using uv (Recommended)
 
 ```bash
-git clone https://github.com/shawnrushefsky/audiobook-mcp.git
-cd audiobook-mcp
+git clone https://github.com/shawnrushefsky/talky-talky.git
+cd talky-talky
 
 # Install with uv
 uv pip install -e ".[tts]"
 
 # Or run directly without installing
-uv run --extra tts audiobook-mcp
+uv run --extra tts talky-talky
 ```
 
 ## Configuration
@@ -70,7 +70,7 @@ Add to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "audiobook": {
-      "command": "audiobook-mcp"
+      "command": "talky-talky"
     }
   }
 }
@@ -83,7 +83,7 @@ Or with uv (no install required):
   "mcpServers": {
     "audiobook": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/audiobook-mcp", "--extra", "tts", "audiobook-mcp"]
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
     }
   }
 }
@@ -96,9 +96,9 @@ Add to your project's `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "audiobook-mcp": {
+    "talky-talky": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/audiobook-mcp", "--extra", "tts", "audiobook-mcp"]
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
     }
   }
 }
@@ -110,7 +110,7 @@ Or add to `~/.claude/settings.json` for global access:
 {
   "mcpServers": {
     "audiobook": {
-      "command": "audiobook-mcp"
+      "command": "talky-talky"
     }
   }
 }
@@ -123,7 +123,7 @@ Add to Cursor's MCP configuration (Settings → MCP Servers):
 ```json
 {
   "audiobook": {
-    "command": "audiobook-mcp"
+    "command": "talky-talky"
   }
 }
 ```
@@ -136,7 +136,7 @@ Add to your Windsurf MCP configuration:
 {
   "mcpServers": {
     "audiobook": {
-      "command": "audiobook-mcp"
+      "command": "talky-talky"
     }
   }
 }
@@ -150,7 +150,7 @@ Add to Cline's MCP server settings in VS Code:
 {
   "cline.mcpServers": {
     "audiobook": {
-      "command": "audiobook-mcp"
+      "command": "talky-talky"
     }
   }
 }
@@ -165,7 +165,7 @@ Add to your Continue configuration (`~/.continue/config.json`):
   "mcpServers": [
     {
       "name": "audiobook",
-      "command": "audiobook-mcp"
+      "command": "talky-talky"
     }
   ]
 }
@@ -180,7 +180,7 @@ Add to your Zed settings (`~/.config/zed/settings.json`):
   "language_models": {
     "mcp_servers": {
       "audiobook": {
-        "command": "audiobook-mcp"
+        "command": "talky-talky"
       }
     }
   }
@@ -194,7 +194,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 server_params = StdioServerParameters(
-    command="audiobook-mcp",
+    command="talky-talky",
     args=[],
 )
 
@@ -443,11 +443,11 @@ pip install -e ".[dev]"
 pytest
 
 # Run with coverage
-pytest --cov=audiobook_mcp
+pytest --cov=talky_talky
 
 # Lint and format
-ruff check audiobook_mcp
-ruff format audiobook_mcp
+ruff check talky_talky
+ruff format talky_talky
 ```
 
 ## License

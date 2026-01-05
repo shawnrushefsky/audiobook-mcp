@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from audiobook_mcp.tools.characters import (
+from talky_talky.tools.characters import (
     add_character,
     get_character,
     get_characters_with_stats,

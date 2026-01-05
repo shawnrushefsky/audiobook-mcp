@@ -30,10 +30,10 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run ruff linter
-        run: ruff check audiobook_mcp/
+        run: ruff check talky_talky/
 
       - name: Run ruff formatter check
-        run: ruff format --check audiobook_mcp/
+        run: ruff format --check talky_talky/
 
   test:
     runs-on: ubuntu-latest
@@ -83,5 +83,5 @@ jobs:
         run: uv pip install --system -e ".[dev]" pyright
 
       - name: Run type checker
-        run: pyright audiobook_mcp/ || echo "Type checking completed with warnings"
+        run: pyright talky_talky/ || echo "Type checking completed with warnings"
         continue-on-error: true

@@ -1,5 +1,5 @@
 [project]
-name = "audiobook-mcp"
+name = "talky-talky"
 version = "0.2.0"
 description = "MCP server for orchestrating full-cast audiobook production with AI voice synthesis"
 readme = "README.md"
@@ -28,7 +28,7 @@ chatterbox = [
 ]
 # All TTS engines
 tts = [
-    "audiobook-mcp[maya1,chatterbox]",
+    "talky-talky[maya1,chatterbox]",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -37,14 +37,14 @@ dev = [
 ]
 
 [project.scripts]
-audiobook-mcp = "audiobook_mcp.server:main"
+talky-talky = "talky_talky.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["audiobook_mcp"]
+packages = ["talky_talky"]
 
 [tool.ruff]
 line-length = 100

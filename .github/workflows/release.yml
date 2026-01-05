@@ -68,7 +68,7 @@ jobs:
             ## Installation
 
             ```bash
-            pip install audiobook-mcp
+            pip install talky-talky
             ```
 
             ## Docker Image
