@@ -62,6 +62,76 @@ uv pip install -e ".[tts]"
 uv run --extra tts talky-talky
 ```
 
+### Using Docker
+
+Pre-built images are available on GitHub Container Registry.
+
+#### Basic Image (Audio Utilities Only)
+
+The default image includes audio utilities but not TTS engines (smaller image size):
+
+```bash
+docker pull ghcr.io/shawnrushefsky/talky-talky:latest
+
+# Run as MCP server (communicates via stdio)
+docker run -i ghcr.io/shawnrushefsky/talky-talky:latest
+```
+
+#### With CUDA (GPU-Accelerated TTS)
+
+For GPU-accelerated TTS, build a custom image with CUDA support:
+
+```dockerfile
+# Dockerfile.cuda
+FROM nvidia/cuda:12.1-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3-pip ffmpeg git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+RUN python3.11 -m pip install --no-cache-dir talky-talky[tts]
+
+ENTRYPOINT ["python3.11", "-m", "talky_talky.server"]
+```
+
+Build and run with GPU access:
+
+```bash
+docker build -f Dockerfile.cuda -t talky-talky-cuda .
+docker run -i --gpus all talky-talky-cuda
+```
+
+#### Docker with MCP Clients
+
+For Claude Desktop or other MCP clients, configure Docker as the command:
+
+```json
+{
+  "mcpServers": {
+    "talky-talky": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/shawnrushefsky/talky-talky:latest"]
+    }
+  }
+}
+```
+
+For CUDA-enabled Docker:
+
+```json
+{
+  "mcpServers": {
+    "talky-talky": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--gpus", "all", "talky-talky-cuda"]
+    }
+  }
+}
+```
+
+> **Note:** Mount volumes for persistent audio files: `-v /path/to/audio:/audio`
+
 ## Configuration
 
 ### Claude Desktop
