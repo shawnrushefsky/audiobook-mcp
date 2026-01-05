@@ -2,6 +2,39 @@
 
 A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate speech with multiple TTS engines, convert audio formats, and process audio files—all through a standardized interface that works with any MCP-compatible client.
 
+- [Talky Talky](#talky-talky)
+  - [Features](#features)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Install from Source](#install-from-source)
+    - [Using uv (Recommended)](#using-uv-recommended)
+    - [Using Docker](#using-docker)
+      - [Basic Image (Audio Utilities Only)](#basic-image-audio-utilities-only)
+      - [With CUDA (GPU-Accelerated TTS)](#with-cuda-gpu-accelerated-tts)
+      - [Docker with MCP Clients](#docker-with-mcp-clients)
+  - [Configuration](#configuration)
+    - [Claude Desktop](#claude-desktop)
+    - [Claude Code (CLI)](#claude-code-cli)
+    - [Other MCP Clients](#other-mcp-clients)
+  - [Available Tools](#available-tools)
+    - [TTS Engine Tools](#tts-engine-tools)
+    - [Speech Generation Tools](#speech-generation-tools)
+    - [Audio Utility Tools](#audio-utility-tools)
+  - [TTS Engine Guide](#tts-engine-guide)
+    - [Maya1 (Voice Design)](#maya1-voice-design)
+    - [Chatterbox (Voice Cloning)](#chatterbox-voice-cloning)
+    - [MiraTTS (Fast Voice Cloning)](#miratts-fast-voice-cloning)
+    - [XTTS-v2 (Multilingual)](#xtts-v2-multilingual)
+  - [Usage Examples](#usage-examples)
+    - [Generate Speech with Maya1](#generate-speech-with-maya1)
+    - [Clone a Voice with Chatterbox](#clone-a-voice-with-chatterbox)
+    - [Convert Audio Format](#convert-audio-format)
+    - [Concatenate Audio Files](#concatenate-audio-files)
+  - [Development](#development)
+  - [License](#license)
+  - [Contributing](#contributing)
+
+
 ## Features
 
 - **Multiple TTS Engines**:
