@@ -425,6 +425,8 @@ class Maya1Engine(TextPromptedEngine):
                 "model_id": MODEL_ID,
                 "snac_model_id": SNAC_MODEL_ID,
                 "default_description": DEFAULT_DESCRIPTION,
+                "license": "Apache-2.0",
+                "license_url": "https://huggingface.co/maya-research/maya1",
             },
         )
 

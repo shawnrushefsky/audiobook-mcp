@@ -160,6 +160,7 @@ class SopranoEngine(TTSEngine):
                 "model_size": "80M parameters",
                 "architecture": "Qwen3 LLM + Vocos decoder",
                 "license": "Apache-2.0",
+                "license_url": "https://huggingface.co/SopranoAI/soprano-mlx",
                 "realtime_factor": "2000x",
                 "streaming_latency": "<15ms",
                 "device_requirement": "CUDA only",

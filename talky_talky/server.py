@@ -9,6 +9,9 @@ This MCP server provides TTS capabilities with pluggable engine support:
 - XTTS-v2: Multilingual voice cloning with 17 language support
 - Kokoro: Voice selection from 54 pre-built voices across 8 languages
 - Soprano: Ultra-fast CUDA TTS with 2000x realtime speed
+- VibeVoice Realtime: Real-time TTS with ~300ms latency (Microsoft)
+- VibeVoice Long-form: Long-form multi-speaker TTS up to 90 minutes (Microsoft)
+- CosyVoice3: Zero-shot multilingual voice cloning with 9 languages (Alibaba)
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -403,6 +406,117 @@ def speak_chatterbox_turbo(
         output_path=output_path,
         engine="chatterbox_turbo",
         reference_audio_paths=reference_audio_paths,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_vibevoice_realtime(
+    text: str,
+    output_path: str,
+    speaker_name: str = "Carter",
+) -> dict:
+    """Generate speech using VibeVoice Realtime (fast single-speaker TTS).
+
+    Microsoft's real-time TTS with ~300ms first-audio latency.
+    Single speaker, up to 10 minutes per generation.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        speaker_name: Name of the speaker voice to use (default: "Carter").
+            Available speakers: Carter, Emily, Nova, Michael, Sarah
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Note: Primarily supports English. Other languages are experimental.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="vibevoice_realtime",
+        voice_description=speaker_name,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_vibevoice_longform(
+    text: str,
+    output_path: str,
+    speaker_name: str = "Carter",
+    speakers: Optional[list[str]] = None,
+) -> dict:
+    """Generate speech using VibeVoice Long-form (multi-speaker TTS).
+
+    Microsoft's long-form TTS supporting up to 90 minutes and 4 speakers.
+    Ideal for podcasts, audiobooks, and conversations.
+
+    Args:
+        text: The text to synthesize. Can include speaker labels for multi-speaker.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        speaker_name: Primary speaker name for single-speaker generation (default: "Carter").
+        speakers: List of speaker names for multi-speaker generation (max 4).
+            If provided, overrides speaker_name.
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Note: Supports English and Chinese. Use speaker labels in text for multi-speaker.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="vibevoice_longform",
+        voice_description=speaker_name,
+        speakers=speakers,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_cosyvoice(
+    text: str,
+    output_path: str,
+    reference_audio_paths: list[str],
+    prompt_text: Optional[str] = None,
+    instruction: Optional[str] = None,
+    language: str = "auto",
+) -> dict:
+    """Generate speech using CosyVoice3 (multilingual voice cloning).
+
+    Alibaba's zero-shot voice cloning with 9 languages and instruction control.
+    Excellent for multilingual content and dialect control.
+
+    Args:
+        text: The text to synthesize. Can include [breath] tags for breathing sounds.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        reference_audio_paths: Paths to reference audio files for voice cloning.
+            At least one required. 5-10 seconds of clear speech recommended.
+        prompt_text: Transcript of reference audio (improves quality).
+        instruction: Natural language instruction for style control.
+            Examples: "请用广东话表达。" (Cantonese), "请用尽可能快地语速说。" (fast speed)
+        language: Target language code (default: "auto" for auto-detection).
+            Supported: zh, en, ja, ko, de, es, fr, it, ru
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Features:
+    - 9 languages: Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
+    - 18+ Chinese dialects via instruction control
+    - Cross-lingual cloning (clone voice in one language, output in another)
+    - [breath] tags for fine-grained breathing control
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="cosyvoice3",
+        reference_audio_paths=reference_audio_paths,
+        prompt_text=prompt_text,
+        instruction=instruction,
+        language=language,
     )
     return to_dict(result)
 

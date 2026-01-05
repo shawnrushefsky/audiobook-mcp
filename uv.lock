@@ -5096,6 +5096,10 @@ chatterbox = [
     { name = "numpy" },
     { name = "onnx" },
 ]
+cosyvoice = [
+    { name = "huggingface-hub" },
+    { name = "torchaudio" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -5137,6 +5141,9 @@ tts = [
     { name = "transformers" },
     { name = "tts" },
 ]
+vibevoice = [
+    { name = "soundfile" },
+]
 xtts = [
     { name = "tts" },
 ]
@@ -5146,6 +5153,7 @@ requires-dist = [
     { name = "chatterbox-tts", marker = "extra == 'chatterbox'", specifier = ">=0.1.0" },
     { name = "einops", marker = "extra == 'mira'", specifier = ">=0.6.0" },
     { name = "fastaudiosr", marker = "extra == 'mira'", git = "https://github.com/ysharma3501/FlashSR.git" },
+    { name = "huggingface-hub", marker = "extra == 'cosyvoice'", specifier = ">=0.20.0" },
     { name = "kokoro", marker = "extra == 'kokoro'", specifier = ">=0.9.2" },
     { name = "librosa", marker = "extra == 'mira'", specifier = ">=0.10.0" },
     { name = "mcp", specifier = ">=1.0.0" },
@@ -5161,14 +5169,16 @@ requires-dist = [
     { name = "snac", marker = "extra == 'maya1'" },
     { name = "soprano-tts", marker = "extra == 'soprano'" },
     { name = "soundfile", specifier = ">=0.12.0" },
+    { name = "soundfile", marker = "extra == 'vibevoice'", specifier = ">=0.12.0" },
     { name = "talky-talky", extras = ["maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano"], marker = "extra == 'tts'" },
     { name = "torch", marker = "extra == 'maya1'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'mira'", specifier = ">=2.0.0" },
+    { name = "torchaudio", marker = "extra == 'cosyvoice'", specifier = ">=2.0.0" },
     { name = "transformers", marker = "extra == 'maya1'", specifier = ">=4.35.0" },
     { name = "transformers", marker = "extra == 'mira'", specifier = ">=4.35.0" },
     { name = "tts", marker = "extra == 'xtts'", specifier = ">=0.22.0" },
 ]
-provides-extras = ["maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "tts", "dev"]
+provides-extras = ["maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "vibevoice", "cosyvoice", "tts", "dev"]
 
 [[package]]
 name = "tensorboard"

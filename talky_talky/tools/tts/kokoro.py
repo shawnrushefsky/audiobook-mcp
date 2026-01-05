@@ -284,7 +284,8 @@ class KokoroEngine(VoiceSelectionEngine):
             extra_info={
                 "model_size": "82M parameters",
                 "architecture": "StyleTTS 2 + ISTFTNet",
-                "license": "Apache 2.0",
+                "license": "Apache-2.0",
+                "license_url": "https://github.com/hexgrad/kokoro",
                 "languages": list(LANGUAGES.keys()),
                 "total_voices": len(VOICES),
                 "default_voice": DEFAULT_VOICE,

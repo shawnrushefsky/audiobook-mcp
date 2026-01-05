@@ -28,6 +28,9 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
     - [XTTS-v2 (Multilingual)](#xtts-v2-multilingual)
     - [Kokoro (Voice Selection)](#kokoro-voice-selection)
     - [Soprano (Ultra-Fast TTS)](#soprano-ultra-fast-tts)
+    - [VibeVoice Realtime (Real-time TTS)](#vibevoice-realtime-real-time-tts)
+    - [VibeVoice Long-form (Multi-speaker TTS)](#vibevoice-long-form-multi-speaker-tts)
+    - [CosyVoice3 (Multilingual Voice Cloning)](#cosyvoice3-multilingual-voice-cloning)
   - [Usage Examples](#usage-examples)
     - [Generate Speech with Maya1](#generate-speech-with-maya1)
     - [Clone a Voice with Chatterbox](#clone-a-voice-with-chatterbox)
@@ -41,7 +44,7 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
 
 ## Features
 
-- **Multiple TTS Engines** (7 engines):
+- **Multiple TTS Engines** (10 engines):
   - **Maya1**: Natural language voice design with 20+ emotion tags (Apache 2.0)
   - **Chatterbox**: Zero-shot multilingual voice cloning with emotion control (23 languages)
   - **Chatterbox Turbo**: Fast voice cloning optimized for production (350M parameters)
@@ -49,6 +52,9 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
   - **XTTS-v2**: Cross-language voice cloning from just 6 seconds of audio (17 languages)
   - **Kokoro**: 54 high-quality pre-built voices across 8 languages (82M parameters, Apache 2.0)
   - **Soprano**: Ultra-fast TTS at 2000x realtime with 32kHz output (CUDA only)
+  - **VibeVoice Realtime**: Real-time TTS with ~300ms latency, single speaker (Microsoft, 0.5B)
+  - **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
+  - **CosyVoice3**: Zero-shot multilingual voice cloning with instruction control (Alibaba, 9 languages)
 - **Audio Utilities**: Format conversion, concatenation, normalization
 - **Cross-Platform**: Works on CUDA, MPS (Apple Silicon), and CPU
 
@@ -250,6 +256,9 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 | `speak_xtts` | Multilingual voice cloning (17 languages) |
 | `speak_kokoro` | Use pre-built voices (54 voices, 8 languages) |
 | `speak_soprano` | Ultra-fast TTS at 2000x realtime (CUDA required) |
+| `speak_vibevoice_realtime` | Real-time TTS with ~300ms latency |
+| `speak_vibevoice_longform` | Long-form multi-speaker TTS (up to 90 min) |
+| `speak_cosyvoice` | Multilingual voice cloning with instruction control |
 
 ### Audio Utility Tools
 
@@ -262,6 +271,20 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 | `check_ffmpeg_available` | Check ffmpeg installation |
 
 ## TTS Engine Guide
+
+### Engine License Summary
+
+| Engine | License | Link |
+|--------|---------|------|
+| Maya1 | Apache-2.0 | [HuggingFace](https://huggingface.co/maya-research/maya1) |
+| Chatterbox | MIT | [GitHub](https://github.com/resemble-ai/chatterbox) |
+| Chatterbox Turbo | MIT | [GitHub](https://github.com/resemble-ai/chatterbox) |
+| MiraTTS | MIT | [HuggingFace](https://huggingface.co/YatharthS/MiraTTS) |
+| XTTS-v2 | CPML | [Coqui](https://coqui.ai/cpml) |
+| Kokoro | Apache-2.0 | [GitHub](https://github.com/hexgrad/kokoro) |
+| Soprano | Apache-2.0 | [HuggingFace](https://huggingface.co/SopranoAI/soprano-mlx) |
+| VibeVoice | MIT | [GitHub](https://github.com/microsoft/VibeVoice) |
+| CosyVoice3 | Apache-2.0 | [GitHub](https://github.com/FunAudioLLM/CosyVoice) |
 
 ### Maya1 (Voice Design)
 
@@ -419,6 +442,116 @@ speak_soprano(
 - `repetition_penalty`: Prevents repetition (default 1.2)
 
 **Requirements:** NVIDIA GPU with CUDA required. Does NOT support MPS or CPU. Outputs 32kHz audio.
+
+### VibeVoice Realtime (Real-time TTS)
+
+Microsoft's real-time TTS with ~300ms first-audio latency. Single speaker with multiple voice options. Ideal for real-time applications.
+
+**Installation:**
+```bash
+git clone https://github.com/microsoft/VibeVoice.git
+cd VibeVoice
+pip install -e .
+```
+
+**Available Speakers:** Carter, Emily, Nova, Michael, Sarah
+
+**Example:**
+```python
+speak_vibevoice_realtime(
+    text="Welcome to our service!",
+    output_path="/tmp/output.wav",
+    speaker_name="Carter"
+)
+```
+
+**Requirements:** Works on CUDA, MPS, and CPU. English primary, other languages experimental. Outputs 24kHz audio.
+
+> **Note:** VibeVoice has dependency conflicts with Chatterbox. Install in a separate environment if needed.
+
+### VibeVoice Long-form (Multi-speaker TTS)
+
+Microsoft's long-form TTS for podcasts and conversations. Supports up to 90 minutes and 4 speakers with natural turn-taking.
+
+**Installation:**
+```bash
+git clone https://github.com/microsoft/VibeVoice.git
+cd VibeVoice
+pip install -e .
+```
+
+**Example:**
+```python
+# Single speaker
+speak_vibevoice_longform(
+    text="This is a long-form narration...",
+    output_path="/tmp/output.wav",
+    speaker_name="Carter"
+)
+
+# Multi-speaker dialogue
+speak_vibevoice_longform(
+    text="Speaker1: Hello! Speaker2: Hi there!",
+    output_path="/tmp/dialogue.wav",
+    speakers=["Carter", "Emily"]
+)
+```
+
+**Requirements:** GPU recommended (~6-8GB VRAM). Supports English and Chinese. Outputs 24kHz audio.
+
+### CosyVoice3 (Multilingual Voice Cloning)
+
+Alibaba's zero-shot voice cloning with instruction-based control for dialect, emotion, and speed. Supports 9 languages and 18+ Chinese dialects.
+
+**Installation:**
+```bash
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
+cd CosyVoice
+conda create -n cosyvoice -y python=3.10
+conda activate cosyvoice
+pip install -r requirements.txt
+
+# Install sox (Ubuntu: apt-get install sox libsox-dev, macOS: brew install sox)
+```
+
+**Supported Languages (9):**
+Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
+
+**Supported Chinese Dialects (18+):**
+Cantonese, Sichuan, Shanghai, Taiwan, Dongbei, and more via instruction control
+
+**Example:**
+```python
+# Zero-shot cloning
+speak_cosyvoice(
+    text="Hello, this is a test.",
+    output_path="/tmp/output.wav",
+    reference_audio_paths=["/path/to/reference.wav"],
+    prompt_text="Optional transcript of reference audio"
+)
+
+# With instruction control (Cantonese)
+speak_cosyvoice(
+    text="好少咯，一般系放嗰啲国庆啊",
+    output_path="/tmp/output.wav",
+    reference_audio_paths=["/path/to/reference.wav"],
+    instruction="请用广东话表达。"
+)
+
+# With breathing tags
+speak_cosyvoice(
+    text="[breath]因为他们那一辈人[breath]在乡里面住的要习惯一点",
+    output_path="/tmp/output.wav",
+    reference_audio_paths=["/path/to/reference.wav"]
+)
+```
+
+**Parameters:**
+- `prompt_text`: Transcript of reference audio (improves quality)
+- `instruction`: Natural language style control (dialect, speed, emotion)
+- `language`: Target language code (auto-detected by default)
+
+**Requirements:** GPU recommended. Works on CUDA and CPU. Outputs 22kHz audio.
 
 ## Usage Examples
 

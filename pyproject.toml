@@ -53,7 +53,24 @@ kokoro = [
 soprano = [
     "soprano-tts",
 ]
-# All TTS engines
+# VibeVoice support (Microsoft real-time and long-form TTS)
+# Note: VibeVoice requires cloning and installing from source:
+# git clone https://github.com/microsoft/VibeVoice.git && pip install -e .
+# Not included in tts extra - requires separate environment due to dependency conflicts
+vibevoice = [
+    # Base dependencies only - full VibeVoice requires source install
+    "soundfile>=0.12.0",
+]
+# CosyVoice3 support (Alibaba multilingual voice cloning)
+# Requires cloning: git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
+# and: pip install -r requirements.txt
+# Note: CosyVoice has complex dependencies that require manual setup
+cosyvoice = [
+    "huggingface_hub>=0.20.0",
+    "torchaudio>=2.0.0",
+    # Note: Full CosyVoice requires cloning the repo and installing requirements.txt
+]
+# All TTS engines (core engines without dependency conflicts)
 tts = [
     "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
 ]

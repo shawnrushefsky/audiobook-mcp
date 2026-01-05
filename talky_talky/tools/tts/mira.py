@@ -228,6 +228,8 @@ class MiraEngine(AudioPromptedEngine):
             emotion_format=None,
             emotion_tags=[],
             extra_info={
+                "license": "MIT",
+                "license_url": "https://huggingface.co/YatharthS/MiraTTS",
                 "model_id": MODEL_ID,
                 "reference_audio": "Clear speech samples, any duration",
                 "performance": "100x+ realtime with batching",

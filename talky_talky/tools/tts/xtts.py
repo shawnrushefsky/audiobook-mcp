@@ -181,6 +181,8 @@ class XTTSEngine(AudioPromptedEngine):
             emotion_format=None,
             emotion_tags=[],
             extra_info={
+                "license": "CPML (Coqui Public Model License)",
+                "license_url": "https://coqui.ai/cpml",
                 "model_name": MODEL_NAME,
                 "reference_audio": "6+ seconds of clear speech recommended",
                 "multilingual": True,

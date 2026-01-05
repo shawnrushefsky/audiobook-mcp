@@ -13,6 +13,9 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **XTTS-v2**: Multilingual voice cloning supporting 17 languages
 - **Kokoro**: Voice selection from 54 pre-built voices across 8 languages (82M, Apache 2.0)
 - **Soprano**: Ultra-fast TTS at 2000x realtime with 32kHz output (CUDA only)
+- **VibeVoice Realtime**: Real-time TTS with ~300ms latency, single speaker (Microsoft, 0.5B)
+- **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
+- **CosyVoice3**: Zero-shot multilingual voice cloning with 9 languages (Alibaba, 0.5B)
 
 Plus audio utilities for format conversion, concatenation, and normalization.
 
@@ -31,6 +34,9 @@ Plus audio utilities for format conversion, concatenation, and normalization.
   - XTTS-v2 (local) - multilingual voice cloning
   - Kokoro (local) - 54 pre-built voices, 8 languages
   - Soprano (local, CUDA only) - ultra-fast 2000x realtime
+  - VibeVoice Realtime (local) - real-time TTS with ~300ms latency
+  - VibeVoice Long-form (local) - multi-speaker long-form TTS
+  - CosyVoice3 (local) - multilingual voice cloning with instruction control
 
 ### Python Version Requirement
 
@@ -67,7 +73,9 @@ talky_talky/
 │       ├── mira.py       # MiraTTS engine implementation
 │       ├── xtts.py       # XTTS-v2 engine implementation
 │       ├── kokoro.py     # Kokoro engine (voice selection)
-│       └── soprano.py    # Soprano engine (ultra-fast)
+│       ├── soprano.py    # Soprano engine (ultra-fast)
+│       ├── vibevoice.py  # VibeVoice engines (realtime + long-form)
+│       └── cosyvoice.py  # CosyVoice3 engine (multilingual)
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
@@ -390,6 +398,9 @@ print(result)
 - `speak_xtts` - Multilingual voice cloning (17 languages)
 - `speak_kokoro` - Use pre-built voices (54 voices, 8 languages)
 - `speak_soprano` - Ultra-fast TTS at 2000x realtime (CUDA only)
+- `speak_vibevoice_realtime` - Real-time TTS with ~300ms latency
+- `speak_vibevoice_longform` - Long-form multi-speaker TTS (up to 90 min)
+- `speak_cosyvoice` - Multilingual voice cloning with instruction control
 
 ### Audio Utility Tools
 - `get_audio_file_info` - Get audio file info (duration, format, size)
@@ -531,6 +542,88 @@ pip install soprano-tts
 - `top_p`: Nucleus sampling (default: 0.95)
 - `repetition_penalty`: Prevents repetition (default: 1.2)
 
+### VibeVoice Realtime (Real-time TTS)
+
+Microsoft's real-time TTS with ~300ms first-audio latency.
+
+**Installation:**
+```bash
+git clone https://github.com/microsoft/VibeVoice.git
+cd VibeVoice
+pip install -e .
+```
+
+**Features:**
+- ~300ms to first audio (very low latency)
+- Up to 10 minutes per generation
+- Single speaker with multiple voice options
+- Works on CUDA, MPS, and CPU
+
+**Languages:** English (primary), other languages experimental
+
+**Parameters:**
+- `speaker_name`: Voice to use (default: "Carter")
+- Available: Carter, Emily, Nova, Michael, Sarah
+
+### VibeVoice Long-form (Multi-speaker TTS)
+
+Microsoft's long-form TTS for podcasts and conversations.
+
+**Installation:**
+```bash
+git clone https://github.com/microsoft/VibeVoice.git
+cd VibeVoice
+pip install -e .
+```
+
+**Features:**
+- Up to 90 minutes per generation
+- Multi-speaker support (up to 4 speakers)
+- Natural turn-taking for dialogues
+- Works on CUDA, MPS, and CPU
+
+**Languages:** English and Chinese
+
+**Parameters:**
+- `speaker_name`: Primary speaker (default: "Carter")
+- `speakers`: List of speaker names for multi-speaker (max 4)
+
+**Note:** VibeVoice has dependency conflicts with Chatterbox. Install in a separate environment if needed.
+
+### CosyVoice3 (Multilingual Voice Cloning)
+
+Alibaba's zero-shot voice cloning with instruction-based control.
+
+**Installation:**
+```bash
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
+cd CosyVoice
+conda create -n cosyvoice -y python=3.10
+conda activate cosyvoice
+pip install -r requirements.txt
+
+# Install sox
+# Ubuntu: sudo apt-get install sox libsox-dev
+# macOS: brew install sox
+```
+
+**Features:**
+- Zero-shot voice cloning from reference audio
+- 9 languages: Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
+- 18+ Chinese dialects via instruction control
+- Cross-lingual cloning
+- Fine-grained control with `[breath]` tags
+
+**Parameters:**
+- `reference_audio_paths`: Reference audio for voice cloning
+- `prompt_text`: Transcript of reference (improves quality)
+- `instruction`: Natural language style control
+- `language`: Target language code
+
+**Instruction Examples:**
+- `"请用广东话表达。"` - Speak in Cantonese
+- `"请用尽可能快地语速说。"` - Speak as fast as possible
+
 ## Installation & Setup
 
 ```bash
@@ -555,8 +648,14 @@ pip install -e ".[kokoro]"
 # Install with Soprano support (ultra-fast, requires CUDA GPU)
 pip install -e ".[soprano]"
 
-# Install all TTS engines
+# Install all TTS engines (core engines without dependency conflicts)
 pip install -e ".[tts]"
+
+# VibeVoice and CosyVoice require separate installation due to dependencies:
+# VibeVoice:
+git clone https://github.com/microsoft/VibeVoice.git && cd VibeVoice && pip install -e .
+# CosyVoice:
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && pip install -r requirements.txt
 
 # Install development dependencies
 pip install -e ".[dev]"

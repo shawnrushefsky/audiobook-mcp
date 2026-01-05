@@ -45,6 +45,8 @@ from .xtts import XTTSEngine
 from .kokoro import KokoroEngine
 from .soprano import SopranoEngine
 from .chatterbox_turbo import ChatterboxTurboEngine
+from .vibevoice import VibeVoiceRealtimeEngine, VibeVoiceLongformEngine
+from .cosyvoice import CosyVoice3Engine
 
 
 # ============================================================================
@@ -278,6 +280,9 @@ register_engine(XTTSEngine)
 register_engine(KokoroEngine)
 register_engine(SopranoEngine)
 register_engine(ChatterboxTurboEngine)
+register_engine(VibeVoiceRealtimeEngine)
+register_engine(VibeVoiceLongformEngine)
+register_engine(CosyVoice3Engine)
 
 
 # ============================================================================
@@ -311,4 +316,7 @@ __all__ = [
     "KokoroEngine",
     "SopranoEngine",
     "ChatterboxTurboEngine",
+    "VibeVoiceRealtimeEngine",
+    "VibeVoiceLongformEngine",
+    "CosyVoice3Engine",
 ]

@@ -136,6 +136,8 @@ class ChatterboxEngine(AudioPromptedEngine):
             emotion_format="[tag]",
             emotion_tags=EMOTION_TAGS,
             extra_info={
+                "license": "MIT",
+                "license_url": "https://github.com/resemble-ai/chatterbox",
                 "reference_audio": "10+ seconds of clear speech recommended",
                 "parameters": {
                     "reference_audio_paths": {
