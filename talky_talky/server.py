@@ -5,6 +5,7 @@ This MCP server provides TTS capabilities with pluggable engine support:
 - Maya1: Text-prompted voice design (describe the voice you want)
 - Chatterbox: Audio-prompted voice cloning (clone from reference audio)
 - MiraTTS: Fast voice cloning with high-quality 48kHz output
+- XTTS-v2: Multilingual voice cloning with 17 language support
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -250,6 +251,42 @@ def speak_mira(
         output_path=output_path,
         engine="mira",
         reference_audio_paths=reference_audio_paths,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_xtts(
+    text: str,
+    output_path: str,
+    reference_audio_paths: list[str],
+    language: str = "en",
+) -> dict:
+    """Generate speech using XTTS-v2 (multilingual voice cloning).
+
+    Multilingual voice cloning supporting 17 languages with cross-language cloning.
+    Only requires ~6 seconds of reference audio.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        reference_audio_paths: Paths to reference audio files for voice cloning.
+            At least one required. 6+ seconds of clear speech recommended.
+        language: Target language code (default: "en").
+            Supported: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, ja, hu, ko, hi
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Note: XTTS-v2 supports cross-language cloning - clone a voice from English
+    audio and generate speech in Japanese, for example.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="xtts",
+        reference_audio_paths=reference_audio_paths,
+        language=language,
     )
     return to_dict(result)
 

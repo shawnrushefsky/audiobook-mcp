@@ -34,6 +34,7 @@ from .utils import check_ffmpeg, get_best_device
 from .maya1 import Maya1Engine
 from .chatterbox import ChatterboxEngine
 from .mira import MiraEngine
+from .xtts import XTTSEngine
 
 
 # ============================================================================
@@ -263,6 +264,7 @@ def get_tts_info() -> dict:
 register_engine(Maya1Engine)
 register_engine(ChatterboxEngine)
 register_engine(MiraEngine)
+register_engine(XTTSEngine)
 
 
 # ============================================================================
@@ -291,4 +293,5 @@ __all__ = [
     "Maya1Engine",
     "ChatterboxEngine",
     "MiraEngine",
+    "XTTSEngine",
 ]

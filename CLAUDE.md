@@ -8,6 +8,8 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 
 - **Maya1**: Text-prompted voice design - create unique voices from natural language descriptions
 - **Chatterbox**: Audio-prompted voice cloning - clone voices from reference audio samples
+- **MiraTTS**: Fast voice cloning with high-quality 48kHz output (CUDA only)
+- **XTTS-v2**: Multilingual voice cloning supporting 17 languages
 
 Plus audio utilities for format conversion, concatenation, and normalization.
 
@@ -21,6 +23,8 @@ Plus audio utilities for format conversion, concatenation, and normalization.
 - **TTS Engines**:
   - Maya1 (local, requires GPU) - voice design from text descriptions
   - Chatterbox (local) - voice cloning from reference audio
+  - MiraTTS (local, CUDA only) - fast voice cloning at 48kHz
+  - XTTS-v2 (local) - multilingual voice cloning
 
 ### Directory Structure
 
@@ -36,7 +40,9 @@ talky_talky/
 │       ├── base.py       # Abstract engine interfaces
 │       ├── utils.py      # Shared utilities (chunking, tag conversion)
 │       ├── maya1.py      # Maya1 engine implementation
-│       └── chatterbox.py # Chatterbox engine implementation
+│       ├── chatterbox.py # Chatterbox engine implementation
+│       ├── mira.py       # MiraTTS engine implementation
+│       └── xtts.py       # XTTS-v2 engine implementation
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
@@ -114,6 +120,8 @@ register_engine(ElevenLabsEngine)
 ### Speech Generation Tools
 - `speak_maya1` - Generate speech with voice description
 - `speak_chatterbox` - Generate speech with voice cloning
+- `speak_mira` - Fast voice cloning with 48kHz output
+- `speak_xtts` - Multilingual voice cloning (17 languages)
 
 ### Audio Utility Tools
 - `get_audio_file_info` - Get audio file info (duration, format, size)
@@ -155,6 +163,39 @@ pip install chatterbox-tts
 
 **Emotion Tags:** `[laugh]`, `[chuckle]`, `[cough]`, `[sigh]`
 
+### MiraTTS (Fast Voice Cloning)
+
+Fast voice cloning with high-quality 48kHz output.
+
+**Requirements:**
+- NVIDIA GPU with CUDA (6GB+ VRAM)
+- Does NOT support MPS or CPU
+
+**Features:**
+- 48kHz output (higher quality than most TTS)
+- Over 100x realtime performance
+- Works with only 6GB VRAM
+
+### XTTS-v2 (Multilingual Voice Cloning)
+
+Multilingual voice cloning from Coqui supporting 17 languages.
+
+**Installation:**
+```bash
+pip install TTS
+```
+
+**Features:**
+- Only requires ~6 seconds of reference audio
+- Cross-language cloning (clone voice in one language, output in another)
+- Works on CUDA, MPS, and CPU
+
+**Supported Languages:**
+English, Spanish, French, German, Italian, Portuguese, Polish, Turkish, Russian, Dutch, Czech, Arabic, Chinese, Japanese, Hungarian, Korean, Hindi
+
+**Parameters:**
+- `language`: Target language code (default: "en")
+
 ## Installation & Setup
 
 ```bash
@@ -167,6 +208,12 @@ pip install -e ".[maya1]"
 # Install with Chatterbox TTS support (voice cloning)
 pip install -e ".[chatterbox]"
 
+# Install with MiraTTS support (requires CUDA GPU)
+pip install -e ".[mira]"
+
+# Install with XTTS-v2 support (multilingual)
+pip install -e ".[xtts]"
+
 # Install all TTS engines
 pip install -e ".[tts]"
 
@@ -178,11 +225,17 @@ pip install -e ".[dev]"
 
 ```bash
 # Run the MCP server (communicates via stdio)
-talky-talky
+uv run talky-talky
 
 # Or run directly
-python -m talky_talky.server
+uv run python -m talky_talky.server
 ```
+
+## Development Notes
+
+- **This project uses `uv`** for package management and running Python
+- Always use `uv run` to execute Python commands (e.g., `uv run python`, `uv run pytest`)
+- Install dependencies with `uv pip install` or `uv sync`
 
 ## Debugging
 

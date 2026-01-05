@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Text-to-Speech MCP server with pluggable engine support for AI agents"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
     "requests>=2.28.0",
@@ -37,9 +37,14 @@ mira = [
     "einops>=0.6.0",
     "onnxruntime>=1.15.0",
 ]
+# XTTS-v2 support (multilingual voice cloning)
+# Works on CUDA, MPS, and CPU
+xtts = [
+    "TTS>=0.22.0",
+]
 # All TTS engines
 tts = [
-    "talky-talky[maya1,chatterbox,mira]",
+    "talky-talky[maya1,chatterbox,mira,xtts]",
 ]
 dev = [
     "pytest>=7.0.0",
