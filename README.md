@@ -23,11 +23,15 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
   - [TTS Engine Guide](#tts-engine-guide)
     - [Maya1 (Voice Design)](#maya1-voice-design)
     - [Chatterbox (Voice Cloning)](#chatterbox-voice-cloning)
+    - [Chatterbox Turbo (Fast Voice Cloning)](#chatterbox-turbo-fast-voice-cloning)
     - [MiraTTS (Fast Voice Cloning)](#miratts-fast-voice-cloning)
     - [XTTS-v2 (Multilingual)](#xtts-v2-multilingual)
+    - [Kokoro (Voice Selection)](#kokoro-voice-selection)
+    - [Soprano (Ultra-Fast TTS)](#soprano-ultra-fast-tts)
   - [Usage Examples](#usage-examples)
     - [Generate Speech with Maya1](#generate-speech-with-maya1)
     - [Clone a Voice with Chatterbox](#clone-a-voice-with-chatterbox)
+    - [Use Kokoro Pre-Built Voices](#use-kokoro-pre-built-voices)
     - [Convert Audio Format](#convert-audio-format)
     - [Concatenate Audio Files](#concatenate-audio-files)
   - [Development](#development)
@@ -37,11 +41,14 @@ A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate spe
 
 ## Features
 
-- **Multiple TTS Engines**:
+- **Multiple TTS Engines** (7 engines):
   - **Maya1**: Natural language voice design with 20+ emotion tags (Apache 2.0)
   - **Chatterbox**: Zero-shot multilingual voice cloning with emotion control (23 languages)
+  - **Chatterbox Turbo**: Fast voice cloning optimized for production (350M parameters)
   - **MiraTTS**: Ultra-fast voice cloning at 100x realtime, 48kHz output (CUDA only)
   - **XTTS-v2**: Cross-language voice cloning from just 6 seconds of audio (17 languages)
+  - **Kokoro**: 54 high-quality pre-built voices across 8 languages (82M parameters, Apache 2.0)
+  - **Soprano**: Ultra-fast TTS at 2000x realtime with 32kHz output (CUDA only)
 - **Audio Utilities**: Format conversion, concatenation, normalization
 - **Cross-Platform**: Works on CUDA, MPS (Apple Silicon), and CPU
 
@@ -73,10 +80,12 @@ cd talky-talky
 pip install -e .
 
 # With specific TTS engines
-pip install -e ".[maya1]"      # Voice design
-pip install -e ".[chatterbox]" # Voice cloning with emotion
+pip install -e ".[maya1]"      # Voice design from descriptions
+pip install -e ".[chatterbox]" # Voice cloning with emotion (includes Turbo)
 pip install -e ".[mira]"       # Fast voice cloning (CUDA only)
 pip install -e ".[xtts]"       # Multilingual voice cloning
+pip install -e ".[kokoro]"     # 54 pre-built voices (requires espeak-ng)
+pip install -e ".[soprano]"    # Ultra-fast TTS (CUDA only)
 
 # All TTS engines
 pip install -e ".[tts]"
@@ -236,8 +245,11 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 |------|-------------|
 | `speak_maya1` | Generate speech with voice description (text-prompted) |
 | `speak_chatterbox` | Generate speech with voice cloning and emotion control |
+| `speak_chatterbox_turbo` | Fast voice cloning optimized for production |
 | `speak_mira` | Fast voice cloning with 48kHz output (CUDA required) |
 | `speak_xtts` | Multilingual voice cloning (17 languages) |
+| `speak_kokoro` | Use pre-built voices (54 voices, 8 languages) |
+| `speak_soprano` | Ultra-fast TTS at 2000x realtime (CUDA required) |
 
 ### Audio Utility Tools
 
@@ -304,6 +316,26 @@ speak_chatterbox(
 
 **Requirements:** Works on CUDA, MPS, and CPU. Outputs 24kHz audio.
 
+### Chatterbox Turbo (Fast Voice Cloning)
+
+Streamlined 350M parameter model optimized for low-latency voice cloning in production voice agents. Faster than standard Chatterbox with a simpler API (no tuning parameters).
+
+**Emotion Tags:**
+```
+[laugh] [chuckle] [cough]
+```
+
+**Example:**
+```python
+speak_chatterbox_turbo(
+    text="Hi there! [chuckle] Thanks for calling.",
+    output_path="/tmp/output.wav",
+    reference_audio_paths=["/path/to/reference.wav"]
+)
+```
+
+**Requirements:** Works on CUDA, MPS, and CPU. Outputs 24kHz audio. <200ms production latency.
+
 ### MiraTTS (Fast Voice Cloning)
 
 Ultra-fast voice cloning optimized for speed and efficiency. Over 100x realtime with batching, latency as low as 100ms. Outputs high-quality 48kHz audio (higher than most TTS models).
@@ -339,6 +371,55 @@ speak_xtts(
 
 **Requirements:** Works on CUDA, MPS, and CPU. Model downloads automatically (~6GB). Outputs 24kHz audio.
 
+### Kokoro (Voice Selection)
+
+Lightweight 82M parameter TTS model with 54 high-quality pre-built voices across 8 languages. No voice cloning or description needed—just select a voice ID. Very fast and runs on any hardware including edge devices. Apache 2.0 licensed.
+
+**Supported Languages (8):**
+American English, British English, Japanese, Mandarin Chinese, Spanish, French, Hindi, Italian, Portuguese
+
+**Voice ID Format:** `[lang][gender]_[name]`
+- `a` = American English, `b` = British English, `j` = Japanese, `z` = Mandarin
+- `f` = female, `m` = male
+
+**Popular Voices:**
+- `af_heart`, `af_bella` - American English female (quality A)
+- `am_fenrir`, `am_michael` - American English male (quality B)
+- `bf_emma`, `bm_george` - British English
+- `jf_alpha`, `jm_kumo` - Japanese
+
+**Example:**
+```python
+speak_kokoro(
+    text="Welcome to the future of text-to-speech.",
+    output_path="/tmp/output.wav",
+    voice="af_heart",
+    speed=1.0
+)
+```
+
+**Requirements:** Requires `espeak-ng` system dependency. Runs on CUDA, MPS, or CPU. Outputs 24kHz audio.
+
+### Soprano (Ultra-Fast TTS)
+
+Ultra-lightweight 80M parameter model with exceptional speed—2000x realtime (10 hours of audio in <20 seconds). Outputs high-fidelity 32kHz audio with <15ms streaming latency. Single built-in voice, no customization.
+
+**Example:**
+```python
+speak_soprano(
+    text="The quick brown fox jumps over the lazy dog.",
+    output_path="/tmp/output.wav",
+    temperature=0.3
+)
+```
+
+**Parameters:**
+- `temperature`: Sampling randomness (default 0.3)
+- `top_p`: Nucleus sampling (default 0.95)
+- `repetition_penalty`: Prevents repetition (default 1.2)
+
+**Requirements:** NVIDIA GPU with CUDA required. Does NOT support MPS or CPU. Outputs 32kHz audio.
+
 ## Usage Examples
 
 ### Generate Speech with Maya1
@@ -351,6 +432,12 @@ Generate speech saying "Welcome to the future of AI" with a deep male narrator v
 
 ```
 Use Chatterbox to clone the voice from /path/to/sample.wav and say "This is a test of voice cloning" with high expressiveness
+```
+
+### Use Kokoro Pre-Built Voices
+
+```
+Use Kokoro with the af_heart voice to say "Hello and welcome!" and save to /tmp/greeting.wav
 ```
 
 ### Convert Audio Format

@@ -4,8 +4,11 @@
 This MCP server provides TTS capabilities with pluggable engine support:
 - Maya1: Text-prompted voice design (describe the voice you want)
 - Chatterbox: Audio-prompted voice cloning (clone from reference audio)
+- Chatterbox Turbo: Fast voice cloning optimized for production
 - MiraTTS: Fast voice cloning with high-quality 48kHz output
 - XTTS-v2: Multilingual voice cloning with 17 language support
+- Kokoro: Voice selection from 54 pre-built voices across 8 languages
+- Soprano: Ultra-fast CUDA TTS with 2000x realtime speed
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -287,6 +290,119 @@ def speak_xtts(
         engine="xtts",
         reference_audio_paths=reference_audio_paths,
         language=language,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_kokoro(
+    text: str,
+    output_path: str,
+    voice: str = "af_heart",
+    speed: float = 1.0,
+) -> dict:
+    """Generate speech using Kokoro (voice selection from 54 pre-built voices).
+
+    Lightweight, fast TTS with 54 high-quality voices across 8 languages.
+    No voice cloning needed - select from pre-built voices.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        voice: Voice ID to use (default: "af_heart").
+            Format: [lang][gender]_[name]
+            Examples: af_heart (American Female Heart), bm_george (British Male George)
+            Languages: a=American, b=British, j=Japanese, z=Mandarin, e=Spanish,
+                      f=French, h=Hindi, i=Italian, p=Portuguese
+        speed: Speech rate multiplier (default: 1.0). Range: 0.5-2.0.
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Popular voices:
+    - af_heart, af_bella (American English female, quality A)
+    - am_fenrir, am_michael (American English male, quality B)
+    - bf_emma, bm_george (British English)
+    - jf_alpha, jm_kumo (Japanese)
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="kokoro",
+        voice=voice,
+        speed=speed,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_soprano(
+    text: str,
+    output_path: str,
+    temperature: float = 0.3,
+    top_p: float = 0.95,
+    repetition_penalty: float = 1.2,
+) -> dict:
+    """Generate speech using Soprano (ultra-fast CUDA TTS).
+
+    Ultra-lightweight 80M model with 2000x realtime speed and 32kHz output.
+    Requires NVIDIA GPU with CUDA. No voice selection or cloning.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        temperature: Sampling temperature (default: 0.3). Lower = more consistent.
+        top_p: Nucleus sampling parameter (default: 0.95).
+        repetition_penalty: Penalty for repetition (default: 1.2).
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Note: Soprano requires CUDA GPU. CPU and MPS are not supported.
+    Best for batch processing where speed is critical.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="soprano",
+        temperature=temperature,
+        top_p=top_p,
+        repetition_penalty=repetition_penalty,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def speak_chatterbox_turbo(
+    text: str,
+    output_path: str,
+    reference_audio_paths: list[str],
+) -> dict:
+    """Generate speech using Chatterbox Turbo (fast voice cloning).
+
+    Streamlined 350M model optimized for low-latency voice cloning.
+    Faster than standard Chatterbox with simpler API (no tuning parameters).
+    Supports paralinguistic tags like [laugh], [chuckle], [cough].
+
+    Args:
+        text: The text to synthesize. Can include emotion tags.
+        output_path: Where to save the generated audio (e.g., "/tmp/output.wav").
+        reference_audio_paths: Paths to reference audio files for voice cloning.
+            At least one required. 10+ seconds of clear speech recommended.
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Emotion tags supported: [laugh], [chuckle], [cough]
+
+    Note: For more control over expressiveness and pacing, use speak_chatterbox
+    which has exaggeration and cfg_weight parameters.
+    """
+    result = generate(
+        text=text,
+        output_path=output_path,
+        engine="chatterbox_turbo",
+        reference_audio_paths=reference_audio_paths,
     )
     return to_dict(result)
 

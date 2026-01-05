@@ -21,6 +21,7 @@ maya1 = [
     "snac",
 ]
 # Chatterbox TTS support (voice cloning with emotion control)
+# Also includes Chatterbox Turbo (fast voice cloning)
 chatterbox = [
     "chatterbox-tts>=0.1.0",
     "numpy<2.4",  # Chatterbox requires numpy < 2.4 for numba compatibility
@@ -42,9 +43,19 @@ mira = [
 xtts = [
     "TTS>=0.22.0",
 ]
+# Kokoro support (voice selection from 54 pre-built voices)
+# Requires espeak-ng system dependency
+kokoro = [
+    "kokoro>=0.9.2",
+]
+# Soprano support (ultra-fast CUDA TTS)
+# CUDA GPU required - no CPU/MPS support
+soprano = [
+    "soprano-tts",
+]
 # All TTS engines
 tts = [
-    "talky-talky[maya1,chatterbox,mira,xtts]",
+    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
 ]
 dev = [
     "pytest>=7.0.0",

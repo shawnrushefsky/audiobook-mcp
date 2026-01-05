@@ -161,3 +161,40 @@ class AudioPromptedEngine(TTSEngine):
             TTSResult with status and metadata.
         """
         pass
+
+
+class VoiceSelectionEngine(TTSEngine):
+    """Base class for voice selection TTS engines.
+
+    These engines select voices from a predefined set of voice IDs.
+    """
+
+    @abstractmethod
+    def get_available_voices(self) -> dict[str, dict]:
+        """Get available voices for this engine.
+
+        Returns:
+            Dict mapping voice_id to voice metadata (name, gender, language, etc.)
+        """
+        pass
+
+    @abstractmethod
+    def generate(
+        self,
+        text: str,
+        output_path: Path,
+        voice: str,
+        **kwargs,
+    ) -> TTSResult:
+        """Generate audio with a selected voice.
+
+        Args:
+            text: The text to synthesize.
+            output_path: Where to save the generated audio.
+            voice: Voice ID to use (e.g., 'af_heart').
+            **kwargs: Engine-specific parameters.
+
+        Returns:
+            TTSResult with status and metadata.
+        """
+        pass

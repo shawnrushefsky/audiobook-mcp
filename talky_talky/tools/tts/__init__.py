@@ -27,7 +27,14 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional, Type
 
-from .base import TTSEngine, TTSResult, EngineInfo, TextPromptedEngine, AudioPromptedEngine
+from .base import (
+    TTSEngine,
+    TTSResult,
+    EngineInfo,
+    TextPromptedEngine,
+    AudioPromptedEngine,
+    VoiceSelectionEngine,
+)
 from .utils import check_ffmpeg, get_best_device
 
 # Import engines at module level (registered below after registry is defined)
@@ -35,6 +42,9 @@ from .maya1 import Maya1Engine
 from .chatterbox import ChatterboxEngine
 from .mira import MiraEngine
 from .xtts import XTTSEngine
+from .kokoro import KokoroEngine
+from .soprano import SopranoEngine
+from .chatterbox_turbo import ChatterboxTurboEngine
 
 
 # ============================================================================
@@ -265,6 +275,9 @@ register_engine(Maya1Engine)
 register_engine(ChatterboxEngine)
 register_engine(MiraEngine)
 register_engine(XTTSEngine)
+register_engine(KokoroEngine)
+register_engine(SopranoEngine)
+register_engine(ChatterboxTurboEngine)
 
 
 # ============================================================================
@@ -278,6 +291,7 @@ __all__ = [
     "EngineInfo",
     "TextPromptedEngine",
     "AudioPromptedEngine",
+    "VoiceSelectionEngine",
     "TTSStatus",
     # Engine registry
     "register_engine",
@@ -294,4 +308,7 @@ __all__ = [
     "ChatterboxEngine",
     "MiraEngine",
     "XTTSEngine",
+    "KokoroEngine",
+    "SopranoEngine",
+    "ChatterboxTurboEngine",
 ]

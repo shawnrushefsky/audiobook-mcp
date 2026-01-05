@@ -8,8 +8,11 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 
 - **Maya1**: Text-prompted voice design - create unique voices from natural language descriptions
 - **Chatterbox**: Audio-prompted voice cloning - clone voices from reference audio samples
+- **Chatterbox Turbo**: Fast voice cloning optimized for production (350M parameters)
 - **MiraTTS**: Fast voice cloning with high-quality 48kHz output (CUDA only)
 - **XTTS-v2**: Multilingual voice cloning supporting 17 languages
+- **Kokoro**: Voice selection from 54 pre-built voices across 8 languages (82M, Apache 2.0)
+- **Soprano**: Ultra-fast TTS at 2000x realtime with 32kHz output (CUDA only)
 
 Plus audio utilities for format conversion, concatenation, and normalization.
 
@@ -23,8 +26,11 @@ Plus audio utilities for format conversion, concatenation, and normalization.
 - **TTS Engines**:
   - Maya1 (local, requires GPU) - voice design from text descriptions
   - Chatterbox (local) - voice cloning from reference audio
+  - Chatterbox Turbo (local) - fast voice cloning for production
   - MiraTTS (local, CUDA only) - fast voice cloning at 48kHz
   - XTTS-v2 (local) - multilingual voice cloning
+  - Kokoro (local) - 54 pre-built voices, 8 languages
+  - Soprano (local, CUDA only) - ultra-fast 2000x realtime
 
 ### Python Version Requirement
 
@@ -57,8 +63,11 @@ talky_talky/
 │       ├── utils.py      # Shared utilities (chunking, tag conversion)
 │       ├── maya1.py      # Maya1 engine implementation
 │       ├── chatterbox.py # Chatterbox engine implementation
+│       ├── chatterbox_turbo.py # Chatterbox Turbo engine
 │       ├── mira.py       # MiraTTS engine implementation
-│       └── xtts.py       # XTTS-v2 engine implementation
+│       ├── xtts.py       # XTTS-v2 engine implementation
+│       ├── kokoro.py     # Kokoro engine (voice selection)
+│       └── soprano.py    # Soprano engine (ultra-fast)
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
@@ -70,9 +79,10 @@ The TTS module uses a pluggable engine architecture:
 
 ```python
 # Base classes in base.py
-TTSEngine           # Abstract base for all engines
-VoiceDesignEngine   # For text-prompted engines (Maya1)
-VoiceCloningEngine  # For audio-prompted engines (Chatterbox)
+TTSEngine              # Abstract base for all engines
+TextPromptedEngine     # For text-prompted engines (Maya1)
+AudioPromptedEngine    # For audio-prompted engines (Chatterbox, MiraTTS, XTTS)
+VoiceSelectionEngine   # For voice selection engines (Kokoro)
 
 # Registry in __init__.py
 register_engine(MyEngine)  # Register new engines
@@ -375,8 +385,11 @@ print(result)
 ### Speech Generation Tools
 - `speak_maya1` - Generate speech with voice description
 - `speak_chatterbox` - Generate speech with voice cloning
+- `speak_chatterbox_turbo` - Fast voice cloning for production
 - `speak_mira` - Fast voice cloning with 48kHz output
 - `speak_xtts` - Multilingual voice cloning (17 languages)
+- `speak_kokoro` - Use pre-built voices (54 voices, 8 languages)
+- `speak_soprano` - Ultra-fast TTS at 2000x realtime (CUDA only)
 
 ### Audio Utility Tools
 - `get_audio_file_info` - Get audio file info (duration, format, size)
@@ -451,6 +464,73 @@ English, Spanish, French, German, Italian, Portuguese, Polish, Turkish, Russian,
 **Parameters:**
 - `language`: Target language code (default: "en")
 
+### Chatterbox Turbo (Fast Voice Cloning)
+
+Streamlined 350M parameter model optimized for low-latency voice cloning.
+
+**Installation:**
+```bash
+pip install chatterbox-tts  # Same package as Chatterbox
+```
+
+**Features:**
+- Faster inference than standard Chatterbox
+- Simpler API (no exaggeration/cfg_weight parameters)
+- <200ms production latency
+- Works on CUDA, MPS, and CPU
+
+**Emotion Tags:** `[laugh]`, `[chuckle]`, `[cough]`
+
+### Kokoro (Voice Selection)
+
+Lightweight 82M parameter TTS with 54 pre-built voices across 8 languages.
+
+**Installation:**
+```bash
+pip install kokoro>=0.9.2
+# System dependency required:
+# Linux: apt-get install espeak-ng
+# macOS: brew install espeak-ng
+```
+
+**Features:**
+- 54 high-quality voices across 8 languages
+- No voice cloning or description needed
+- Very fast, runs on CPU/GPU/edge devices
+- Apache 2.0 licensed
+
+**Languages:** American English, British English, Japanese, Mandarin Chinese, Spanish, French, Hindi, Italian, Portuguese
+
+**Voice ID Format:** `[lang][gender]_[name]` (e.g., `af_heart`, `bm_george`)
+
+**Parameters:**
+- `voice`: Voice ID (default: "af_heart")
+- `speed`: Speech rate multiplier (default: 1.0)
+
+### Soprano (Ultra-Fast TTS)
+
+Ultra-lightweight 80M parameter model with 2000x realtime speed.
+
+**Installation:**
+```bash
+pip install soprano-tts
+```
+
+**Requirements:**
+- NVIDIA GPU with CUDA (required)
+- Does NOT support MPS or CPU
+
+**Features:**
+- 2000x realtime (10 hours audio in <20 seconds)
+- High-fidelity 32kHz output
+- <15ms streaming latency
+- Single built-in voice
+
+**Parameters:**
+- `temperature`: Sampling randomness (default: 0.3)
+- `top_p`: Nucleus sampling (default: 0.95)
+- `repetition_penalty`: Prevents repetition (default: 1.2)
+
 ## Installation & Setup
 
 ```bash
@@ -460,7 +540,7 @@ pip install -e .
 # Install with Maya1 TTS support (requires CUDA GPU)
 pip install -e ".[maya1]"
 
-# Install with Chatterbox TTS support (voice cloning)
+# Install with Chatterbox TTS support (voice cloning, includes Turbo)
 pip install -e ".[chatterbox]"
 
 # Install with MiraTTS support (requires CUDA GPU)
@@ -468,6 +548,12 @@ pip install -e ".[mira]"
 
 # Install with XTTS-v2 support (multilingual)
 pip install -e ".[xtts]"
+
+# Install with Kokoro support (54 pre-built voices, requires espeak-ng)
+pip install -e ".[kokoro]"
+
+# Install with Soprano support (ultra-fast, requires CUDA GPU)
+pip install -e ".[soprano]"
 
 # Install all TTS engines
 pip install -e ".[tts]"
