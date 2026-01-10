@@ -4,6 +4,7 @@ Provides tools for analyzing audio to enable agent self-verification of TTS outp
 - Emotion detection: Verify emotional tone matches intent
 - Voice similarity: Compare generated voice to reference
 - Speech quality: Assess naturalness and technical quality
+- SFX analysis: Loudness, clipping, spectrum, silence, format validation
 
 Example usage:
     from talky_talky.tools.analysis import (
@@ -48,6 +49,21 @@ from .base import (
     SpeechQualityEngine,
     SpeechQualityEngineInfo,
     SpeechQualityResult,
+)
+
+# SFX analysis (non-speech audio)
+from .sfx import (
+    LoudnessResult,
+    ClippingResult,
+    SpectralResult,
+    SilenceResult,
+    FormatValidationResult,
+    analyze_loudness,
+    detect_clipping,
+    analyze_spectrum,
+    detect_silence,
+    validate_format,
+    get_sfx_analysis_info,
 )
 
 # Engine registries
@@ -302,4 +318,16 @@ __all__ = [
     "get_voice_embedding",
     "assess_quality",
     "to_dict",
+    # SFX Analysis
+    "LoudnessResult",
+    "ClippingResult",
+    "SpectralResult",
+    "SilenceResult",
+    "FormatValidationResult",
+    "analyze_loudness",
+    "detect_clipping",
+    "analyze_spectrum",
+    "detect_silence",
+    "validate_format",
+    "get_sfx_analysis_info",
 ]

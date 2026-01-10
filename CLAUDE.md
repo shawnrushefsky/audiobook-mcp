@@ -26,6 +26,11 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **Resemblyzer**: Voice similarity comparison using speaker embeddings (~1000x realtime)
 - **NISQA**: Non-intrusive speech quality assessment predicting MOS scores (1-5 scale)
 
+**Audio Asset Management:**
+- **Local Source**: Index and search local audio folders with SQLite FTS5
+- **Freesound.org**: Search and download Creative Commons licensed sounds
+- **License Tracking**: CC0, CC-BY, CC-BY-NC, CC-BY-SA, Sampling+ attribution
+
 Plus audio utilities for format conversion, concatenation, and normalization.
 
 ## Architecture
@@ -97,12 +102,18 @@ talky_talky/
 │   │   ├── base.py       # Abstract transcription interfaces
 │   │   ├── whisper.py    # Whisper engine (transformers)
 │   │   └── faster_whisper.py # Faster-Whisper engine (CTranslate2)
-│   └── analysis/
-│       ├── __init__.py   # Public interface, engine registry
-│       ├── base.py       # Abstract analysis interfaces
-│       ├── emotion2vec.py # Emotion detection engine
-│       ├── resemblyzer.py # Voice similarity engine
-│       └── nisqa.py      # Speech quality engine
+│   ├── analysis/
+│   │   ├── __init__.py   # Public interface, engine registry
+│   │   ├── base.py       # Abstract analysis interfaces
+│   │   ├── emotion2vec.py # Emotion detection engine
+│   │   ├── resemblyzer.py # Voice similarity engine
+│   │   └── nisqa.py      # Speech quality engine
+│   └── assets/
+│       ├── __init__.py   # Public interface, unified search
+│       ├── base.py       # Asset/License dataclasses, source interfaces
+│       ├── database.py   # SQLite asset index with FTS5
+│       ├── local.py      # Local filesystem asset source
+│       └── freesound.py  # Freesound.org API integration
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
@@ -494,6 +505,30 @@ print(result)
 - `extract_voice_embedding` - Get voice embedding vector for storage/comparison
 - `analyze_speech_quality` - Assess speech quality (MOS score, noisiness, etc.)
 - `verify_tts_comprehensive` - Combined verification (emotion, similarity, quality, transcription)
+
+### SFX Analysis Tools (Sound Effects)
+- `check_sfx_analysis_availability` - Check SFX analysis tools availability
+- `analyze_audio_loudness` - Measure peak, RMS, LUFS, dynamic range, true peak
+- `detect_audio_clipping` - Find clipped samples and regions of digital distortion
+- `analyze_audio_spectrum` - Analyze frequency content, brightness, energy distribution
+- `detect_audio_silence` - Find leading/trailing silence and gaps in audio
+- `validate_audio_format` - Validate sample rate, channels, bit depth against targets
+
+### Audio Asset Management Tools
+- `list_asset_sources` - List available asset sources (local, Freesound)
+- `search_audio_assets` - Search for sound effects, music, and ambience
+- `get_audio_asset` - Get detailed info about an asset
+- `download_audio_asset` - Download remote asset to local storage
+- `import_audio_folder` - Import local audio folder into asset library
+- `configure_freesound_api` - Configure Freesound.org API key
+- `set_audio_library_path` - Set custom library storage path
+- `get_audio_library_path` - Get current library path
+- `add_asset_tags` - Add tags to an asset
+- `remove_asset_tags` - Remove tags from an asset
+- `list_all_asset_tags` - List all tags with usage counts
+- `list_indexed_audio_folders` - List indexed local folders
+- `rescan_audio_folder` - Rescan folder for new files
+- `remove_indexed_audio_folder` - Remove folder from index
 
 ## TTS Engines
 
@@ -894,6 +929,92 @@ if result.status == "success":
     for dim in result.dimensions:
         print(f"  {dim.name}: {dim.score:.2f}")
 ```
+
+## Audio Asset Management
+
+The asset management system provides unified access to sound effects, music, and ambience from multiple sources with license tracking.
+
+### Asset Sources
+
+**Local Source:**
+- Indexes audio files from local folders
+- Supports: wav, mp3, ogg, flac, m4a, aac, wma, aiff, opus
+- Auto-extracts tags from filenames and folder structure
+- Auto-detects asset type from path keywords (sfx, music, ambience)
+- SQLite database with FTS5 full-text search
+
+**Freesound.org Source:**
+- Collaborative database of Creative Commons licensed sounds
+- Requires free API credentials from https://freesound.org/apiv2/apply
+- **Important:** Use the "Client secret/Api key" as the API token (NOT the "Client id")
+- Token authentication (no OAuth required for basic access)
+- Downloads high-quality MP3 previews (full quality requires OAuth2)
+
+### Asset Types
+
+- **sfx** - Sound effects (explosions, footsteps, UI sounds)
+- **music** - Musical tracks and loops
+- **ambience** - Environmental and atmospheric sounds
+
+### License Tracking
+
+All assets include license information for proper attribution:
+- **CC0** - Public domain, no attribution required
+- **CC-BY** - Attribution required
+- **CC-BY-NC** - Attribution required, non-commercial only
+- **CC-BY-SA** - Attribution required, share-alike
+- **Sampling+** - Creative use allowed with attribution
+
+### Architecture
+
+```python
+# Base classes in assets/base.py
+Asset              # Core asset dataclass with metadata
+AssetType          # Enum: sfx, music, ambience
+LicenseInfo        # License type and attribution info
+SearchResult       # Paginated search results
+AssetSource        # Abstract base for all sources
+LocalAssetSource   # Base for local file sources
+RemoteAssetSource  # Base for API-based sources
+
+# Sources
+LocalSource        # Local filesystem indexer (assets/local.py)
+FreesoundSource    # Freesound.org API (assets/freesound.py)
+
+# High-level API in assets/__init__.py
+search_assets()        # Unified search across all sources
+get_asset()            # Get asset by ID
+download_asset()       # Download to local storage
+import_folder()        # Import local folder
+configure_freesound()  # Set API key
+```
+
+### Example Usage
+
+```python
+from talky_talky.tools.assets import search_assets, download_asset, import_folder
+
+# Import local sound effects folder
+result = await import_folder("/path/to/sfx", asset_type="sfx")
+print(f"Imported {result['assets_imported']} files")
+
+# Search for explosion sounds
+results = await search_assets("explosion", asset_type="sfx", max_duration_secs=3.0)
+for asset in results.assets:
+    print(f"{asset.name} ({asset.duration_ms}ms) - {asset.license.license_type}")
+
+# Download a Freesound asset
+download = await download_asset("freesound:12345")
+print(f"Downloaded to: {download['local_path']}")
+```
+
+### Storage
+
+The asset library uses SQLite for indexing with FTS5 full-text search:
+- Default location: `~/Documents/talky-talky/assets/`
+- Database: `assets.db`
+- Downloads: `downloads/` subdirectory
+- Configurable via `set_audio_library_path()`
 
 ## Installation & Setup
 

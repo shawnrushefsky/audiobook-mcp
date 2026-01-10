@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Talky Talky - Text-to-Speech and Speech-to-Text MCP Server for AI Agents.
+"""Talky Talky - Text-to-Speech, Speech-to-Text, and Audio Asset MCP Server for AI Agents.
 
-This MCP server provides TTS and transcription capabilities with pluggable engine support:
+This MCP server provides TTS, transcription, and audio asset management capabilities.
 
 TTS Engines:
 - Maya1: Text-prompted voice design (describe the voice you want)
@@ -18,6 +18,12 @@ TTS Engines:
 Transcription Engines:
 - Whisper: OpenAI's robust speech recognition (99+ languages)
 - Faster-Whisper: CTranslate2-optimized Whisper (4x faster)
+
+Audio Asset Management:
+- Local folder indexing with auto-tagging
+- Freesound.org integration for Creative Commons licensed sounds
+- Unified search across all sources
+- Tag management and organization
 
 Plus audio utilities for format conversion and concatenation.
 """
@@ -72,6 +78,33 @@ from .tools.analysis import (
     list_similarity_engines,
     list_quality_engines,
     to_dict as analysis_to_dict,
+    # SFX analysis
+    analyze_loudness,
+    detect_clipping,
+    analyze_spectrum,
+    detect_silence,
+    validate_format,
+    get_sfx_analysis_info,
+)
+
+# Import assets module
+from .tools.assets import (
+    search_assets as search_assets_async,
+    get_asset as get_asset_async,
+    download_asset as download_asset_async,
+    import_folder as import_folder_async,
+    list_sources,
+    configure_freesound,
+    set_asset_library_path,
+    get_asset_library_path,
+    add_tags,
+    remove_tags,
+    list_tags,
+    list_indexed_folders as list_indexed_folders_async,
+    rescan_folder as rescan_folder_async,
+    remove_indexed_folder as remove_indexed_folder_async,
+    auto_tag_asset as auto_tag_asset_async,
+    get_autotag_capabilities,
 )
 
 
@@ -1548,6 +1581,597 @@ def verify_tts_comprehensive(
         }
 
     return results
+
+
+# ============================================================================
+# Sound Effect Analysis Tools
+# ============================================================================
+
+
+@mcp.tool()
+def check_sfx_analysis_availability() -> dict:
+    """Check if SFX analysis tools are available.
+
+    Returns status of analysis capabilities for non-speech audio:
+    - Loudness analysis (peak, RMS, LUFS, dynamic range)
+    - Clipping detection
+    - Spectral analysis
+    - Silence detection
+    - Format validation
+
+    Returns:
+        Dict with available tools and requirements.
+    """
+    return get_sfx_analysis_info()
+
+
+@mcp.tool()
+def analyze_audio_loudness(audio_path: str) -> dict:
+    """Analyze loudness characteristics of an audio file.
+
+    Measures peak level, RMS, integrated loudness (LUFS), dynamic range,
+    and true peak. Use this to verify audio levels meet broadcast or
+    game audio standards.
+
+    Args:
+        audio_path: Path to audio file to analyze.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - peak_db: Peak level in dBFS
+        - peak_linear: Peak level as linear value (0-1)
+        - rms_db: RMS level in dBFS
+        - lufs: Integrated loudness in LUFS
+        - dynamic_range_db: Difference between peak and RMS
+        - true_peak_db: Inter-sample true peak in dBTP
+        - is_clipping: True if peak >= 0 dBFS
+
+    Level guidelines:
+    - Broadcast: -24 to -16 LUFS
+    - Streaming: -14 to -16 LUFS
+    - Game SFX: -6 to -12 dBFS peak
+    - Headroom: Keep peaks below -1 dBFS
+    """
+    result = analyze_loudness(audio_path)
+    return result.to_dict()
+
+
+@mcp.tool()
+def detect_audio_clipping(
+    audio_path: str,
+    threshold: float = 0.99,
+    min_consecutive: int = 2,
+) -> dict:
+    """Detect clipping (digital distortion) in audio.
+
+    Finds samples at or near maximum amplitude that indicate clipping.
+    Clipping causes harsh distortion and should be avoided in final audio.
+
+    Args:
+        audio_path: Path to audio file to analyze.
+        threshold: Amplitude threshold for clipping (0-1, default 0.99).
+        min_consecutive: Minimum consecutive clipped samples to count as a region.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - has_clipping: True if clipping detected
+        - clipped_samples: Number of clipped samples
+        - clipped_percentage: Percentage of samples clipped
+        - clipped_regions: List of clipping regions with timestamps
+        - max_consecutive_clipped: Longest run of clipped samples
+
+    If clipping is detected:
+    - Reduce input gain before processing
+    - Use a limiter instead of hard clipping
+    - Re-record at lower levels
+    """
+    result = detect_clipping(audio_path, threshold=threshold, min_consecutive=min_consecutive)
+    return result.to_dict()
+
+
+@mcp.tool()
+def analyze_audio_spectrum(audio_path: str) -> dict:
+    """Analyze spectral characteristics of audio.
+
+    Measures frequency content, brightness, and energy distribution.
+    Useful for understanding the tonal qualities of sound effects.
+
+    Args:
+        audio_path: Path to audio file to analyze.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - dominant_frequency_hz: Most prominent frequency
+        - frequency_centroid_hz: Spectral centroid (brightness)
+        - bandwidth_hz: Spectral bandwidth (frequency spread)
+        - low_freq_energy: Energy ratio in 20-250 Hz (bass)
+        - mid_freq_energy: Energy ratio in 250-4000 Hz (mids)
+        - high_freq_energy: Energy ratio in 4000-20000 Hz (highs)
+        - rolloff_hz: Frequency below which 85% of energy exists
+        - zero_crossing_rate: Rate of sign changes (noisiness indicator)
+
+    Interpretation:
+    - High centroid = bright/harsh sound
+    - High ZCR = noisy/percussive
+    - High low_freq_energy = bassy/deep
+    """
+    result = analyze_spectrum(audio_path)
+    return result.to_dict()
+
+
+@mcp.tool()
+def detect_audio_silence(
+    audio_path: str,
+    threshold_db: float = -40.0,
+    min_silence_ms: float = 100.0,
+) -> dict:
+    """Detect silence regions in audio.
+
+    Finds leading silence, trailing silence, and gaps within the audio.
+    Useful for trimming sound effects or detecting editing issues.
+
+    Args:
+        audio_path: Path to audio file to analyze.
+        threshold_db: dB threshold below which audio is silent (default -40).
+        min_silence_ms: Minimum duration to count as silence (default 100ms).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - leading_silence_ms: Silence at start
+        - trailing_silence_ms: Silence at end
+        - total_silence_ms: Total silence duration
+        - silence_percentage: Percentage of audio that is silent
+        - silence_regions: List of silence regions with timestamps
+        - content_start_ms: Where actual content begins
+        - content_end_ms: Where actual content ends
+        - content_duration_ms: Duration of non-silent content
+
+    Use cases:
+    - Trim leading/trailing silence from SFX
+    - Find gaps in audio that need fixing
+    - Verify sound effect has proper timing
+    """
+    result = detect_silence(audio_path, threshold_db=threshold_db, min_silence_ms=min_silence_ms)
+    return result.to_dict()
+
+
+@mcp.tool()
+def validate_audio_format(
+    audio_path: str,
+    target_sample_rate: Optional[int] = None,
+    target_channels: Optional[int] = None,
+    target_bit_depth: Optional[int] = None,
+    min_duration_ms: Optional[float] = None,
+    max_duration_ms: Optional[float] = None,
+    max_file_size_bytes: Optional[int] = None,
+) -> dict:
+    """Validate audio format against target specifications.
+
+    Checks sample rate, channels, bit depth, duration, and file size
+    against provided targets. Reports any mismatches with recommendations.
+
+    Args:
+        audio_path: Path to audio file to validate.
+        target_sample_rate: Required sample rate (e.g., 44100, 48000).
+        target_channels: Required channels (1=mono, 2=stereo).
+        target_bit_depth: Required bit depth (16, 24, 32).
+        min_duration_ms: Minimum duration in milliseconds.
+        max_duration_ms: Maximum duration in milliseconds.
+        max_file_size_bytes: Maximum file size in bytes.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - is_valid: True if all checks pass
+        - sample_rate: Actual sample rate
+        - channels: Actual channel count
+        - bit_depth: Actual bit depth (None for compressed)
+        - duration_ms: Actual duration
+        - format: File format
+        - file_size_bytes: File size
+        - issues: List of validation issues
+        - recommendations: Suggested fixes
+
+    Common targets:
+    - Game audio: 44100 Hz, 16-bit, mono for SFX
+    - Broadcast: 48000 Hz, 24-bit, stereo
+    - Web: 44100 Hz, max 5MB file size
+    """
+    result = validate_format(
+        audio_path,
+        target_sample_rate=target_sample_rate,
+        target_channels=target_channels,
+        target_bit_depth=target_bit_depth,
+        min_duration_ms=min_duration_ms,
+        max_duration_ms=max_duration_ms,
+        max_file_size_bytes=max_file_size_bytes,
+    )
+    return result.to_dict()
+
+
+# ============================================================================
+# Audio Asset Management Tools
+# ============================================================================
+
+
+@mcp.tool()
+def list_asset_sources() -> dict:
+    """List all available audio asset sources.
+
+    Returns information about each source including:
+    - Name and description
+    - Whether it requires API key configuration
+    - Supported asset types (sfx, music, ambience)
+    - Availability status
+
+    Returns:
+        Dict with sources mapping source_id to source info.
+    """
+    sources = list_sources()
+    return {
+        "sources": {source_id: info.to_dict() for source_id, info in sources.items()},
+    }
+
+
+@mcp.tool()
+async def search_audio_assets(
+    query: str,
+    asset_type: Optional[str] = None,
+    source: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+    min_duration_secs: Optional[float] = None,
+    max_duration_secs: Optional[float] = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """Search for audio assets (sound effects, music, ambience) across all sources.
+
+    Searches both local indexed folders and remote sources like Freesound.org.
+    Results include license information for proper attribution.
+
+    Args:
+        query: Search query string (e.g., "explosion", "forest ambience", "piano loop").
+        asset_type: Filter by type - "sfx", "music", or "ambience". If None, searches all types.
+        source: Limit to specific source - "local" or "freesound". If None, searches all.
+        tags: Filter by tags (e.g., ["impact", "loud"]).
+        min_duration_secs: Minimum duration in seconds.
+        max_duration_secs: Maximum duration in seconds.
+        page: Page number for pagination (1-indexed).
+        page_size: Number of results per page (max 100).
+
+    Returns:
+        Dict with:
+        - assets: List of matching assets with full metadata
+        - total_count: Total number of matches across all pages
+        - page: Current page number
+        - page_size: Results per page
+        - has_more: Whether more results are available
+
+    Example:
+        Search for short explosion sounds:
+        search_audio_assets("explosion", asset_type="sfx", max_duration_secs=3.0)
+    """
+    result = await search_assets_async(
+        query=query,
+        asset_type=asset_type,
+        source=source,
+        tags=tags,
+        min_duration_secs=min_duration_secs,
+        max_duration_secs=max_duration_secs,
+        page=page,
+        page_size=min(page_size, 100),
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+async def get_audio_asset(asset_id: str) -> dict:
+    """Get detailed information about a specific audio asset.
+
+    Args:
+        asset_id: The asset ID (format: "source:id", e.g., "freesound:12345" or "local:abc123").
+
+    Returns:
+        Dict with full asset details including:
+        - name, description, tags
+        - duration, format, sample_rate, channels
+        - license information (type, attribution requirements)
+        - local_path (if downloaded)
+        - preview_url (for remote assets)
+
+    Returns error if asset not found.
+    """
+    asset = await get_asset_async(asset_id)
+    if asset is None:
+        return {"status": "error", "error": f"Asset not found: {asset_id}"}
+    return {"status": "success", "asset": asset.to_dict()}
+
+
+@mcp.tool()
+async def download_audio_asset(
+    asset_id: str,
+    output_path: Optional[str] = None,
+) -> dict:
+    """Download an audio asset to local storage.
+
+    For Freesound assets, downloads the high-quality preview (full download requires OAuth2).
+    For local assets, returns the existing path.
+
+    Args:
+        asset_id: The asset ID to download (e.g., "freesound:12345").
+        output_path: Optional output path. If not provided, saves to the asset library
+            downloads folder with auto-generated filename.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - local_path: Path to the downloaded file
+        - already_local: True if file was already downloaded
+        - asset_id: The asset ID
+
+    Note: Check the asset's license info for attribution requirements before use.
+    """
+    return await download_asset_async(asset_id, output_path)
+
+
+@mcp.tool()
+async def import_audio_folder(
+    folder_path: str,
+    asset_type: Optional[str] = None,
+    recursive: bool = True,
+) -> dict:
+    """Import audio files from a folder into the asset library.
+
+    Scans the folder for audio files (wav, mp3, ogg, flac, m4a, aac, wma, aiff, opus)
+    and indexes them for searching. Automatically extracts:
+    - Duration, sample rate, channels, file size
+    - Tags from filename and folder structure
+    - Asset type from path keywords (sfx, music, ambience)
+
+    Args:
+        folder_path: Path to folder containing audio files.
+        asset_type: Default asset type ("sfx", "music", "ambience").
+            If not specified, auto-detected from path keywords.
+        recursive: Whether to scan subdirectories (default: True).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - folder: The folder path
+        - assets_imported: Number of files indexed
+        - recursive: Whether subdirectories were scanned
+
+    Example:
+        import_audio_folder("/path/to/sound-effects", asset_type="sfx")
+    """
+    return await import_folder_async(
+        folder_path=folder_path,
+        asset_type=asset_type,
+        recursive=recursive,
+        auto_tag=False,
+    )
+
+
+@mcp.tool()
+def configure_freesound_api(api_key: str) -> dict:
+    """Configure the Freesound.org API key for searching and downloading sounds.
+
+    Freesound is a collaborative database of Creative Commons licensed sounds.
+    To get API credentials:
+    1. Create a free account at https://freesound.org
+    2. Apply for API credentials at https://freesound.org/apiv2/apply
+    3. Use the "Client secret/Api key" as your API token (NOT the "Client id")
+
+    Note: Freesound's "Token Authentication" uses the "Client secret" as the API token.
+    The "Client id" is only needed for OAuth2 flows.
+
+    The API key is stored persistently in the asset library database.
+
+    Args:
+        api_key: Your Freesound API token (the "Client secret" from your credentials).
+
+    Returns:
+        Dict with configuration status.
+    """
+    return configure_freesound(api_key)
+
+
+@mcp.tool()
+def set_audio_library_path(path: str) -> dict:
+    """Set the asset library path where database and downloads are stored.
+
+    By default, the asset library is stored in ~/Documents/talky-talky/assets/.
+    Use this to configure a custom location.
+
+    Args:
+        path: Directory path for the asset library, or "default" to reset.
+
+    Returns:
+        Dict with:
+        - status: "success"
+        - database_path: Path to the SQLite database
+        - library_path: Root path of the asset library
+    """
+    return set_asset_library_path(path)
+
+
+@mcp.tool()
+def get_audio_library_path() -> dict:
+    """Get the current asset library path configuration.
+
+    Returns:
+        Dict with:
+        - database_path: Path to the SQLite database
+        - library_path: Root path of the asset library
+        - exists: Whether the database exists
+    """
+    return get_asset_library_path()
+
+
+@mcp.tool()
+def add_asset_tags(asset_id: str, tags: list[str]) -> dict:
+    """Add tags to an audio asset for better organization and search.
+
+    Tags help categorize and find assets. You can add custom tags like
+    "boss-fight", "outdoor", "scary", etc.
+
+    Args:
+        asset_id: The asset ID to tag (e.g., "local:abc123").
+        tags: List of tags to add.
+
+    Returns:
+        Dict with status and tags added.
+    """
+    return add_tags(asset_id, tags, source="manual")
+
+
+@mcp.tool()
+def remove_asset_tags(asset_id: str, tags: list[str]) -> dict:
+    """Remove tags from an audio asset.
+
+    Args:
+        asset_id: The asset ID to update.
+        tags: List of tags to remove.
+
+    Returns:
+        Dict with status and tags removed.
+    """
+    return remove_tags(asset_id, tags)
+
+
+@mcp.tool()
+def list_all_asset_tags() -> list[dict]:
+    """List all tags in the asset library with usage counts.
+
+    Returns:
+        List of dicts with:
+        - name: Tag name
+        - source: How the tag was added ("manual", "ai", "api", "path")
+        - count: Number of assets with this tag
+
+    Useful for exploring what tags are available for filtering.
+    """
+    return list_tags()
+
+
+@mcp.tool()
+async def list_indexed_audio_folders() -> list[dict]:
+    """List all folders that have been indexed for audio assets.
+
+    Returns:
+        List of folder info dicts with:
+        - path: Folder path
+        - asset_type: Default asset type for the folder
+        - recursive: Whether subdirectories were included
+        - file_count: Number of files indexed
+        - indexed_at: When the folder was indexed
+    """
+    return await list_indexed_folders_async()
+
+
+@mcp.tool()
+async def rescan_audio_folder(folder_path: str) -> dict:
+    """Rescan an indexed folder for new or modified audio files.
+
+    Use this after adding new files to an indexed folder.
+
+    Args:
+        folder_path: Path to the folder to rescan.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - folder: The folder path
+        - assets_updated: Number of files added/updated
+    """
+    return await rescan_folder_async(folder_path)
+
+
+@mcp.tool()
+async def remove_indexed_audio_folder(folder_path: str) -> dict:
+    """Remove an indexed folder and all its assets from the library.
+
+    This does NOT delete the actual audio files, only removes them from
+    the search index.
+
+    Args:
+        folder_path: Path to the folder to remove.
+
+    Returns:
+        Dict with status ("success", "not_found", or "error").
+    """
+    return await remove_indexed_folder_async(folder_path)
+
+
+@mcp.tool()
+def check_autotag_availability() -> dict:
+    """Check which AI auto-tagging capabilities are available.
+
+    Auto-tagging uses various AI engines to generate semantic tags:
+    - Transcription: Extracts keywords from speech content
+    - Emotion: Detects emotional tone (happy, sad, angry, etc.)
+    - Quality: Assesses audio quality level
+
+    Returns:
+        Dict with available capabilities and their descriptions.
+    """
+    return get_autotag_capabilities()
+
+
+@mcp.tool()
+async def auto_tag_audio_asset(
+    asset_id: str,
+    use_transcription: bool = True,
+    use_emotion: bool = True,
+    use_quality: bool = True,
+    transcription_model: str = "base",
+    max_keywords: int = 8,
+) -> dict:
+    """Auto-tag an audio asset using AI analysis.
+
+    Analyzes the audio file and generates semantic tags:
+    - Transcription-based: Extracts keywords from speech content (e.g., "hello", "world")
+    - Emotion detection: Tags detected emotions (e.g., "happy", "angry", "sad")
+    - Quality assessment: Tags quality level (e.g., "excellent-quality", "good-quality")
+
+    The generated tags are automatically saved to the asset in the database.
+
+    Args:
+        asset_id: The asset ID to tag (e.g., "local:abc123").
+        use_transcription: Extract keywords from speech content (requires faster-whisper).
+        use_emotion: Detect and tag emotions (requires emotion2vec).
+        use_quality: Assess and tag quality level (requires nisqa).
+        transcription_model: Whisper model size for transcription.
+            Options: "tiny", "base", "small", "medium", "large-v3"
+            Larger models are more accurate but slower.
+        max_keywords: Maximum number of keywords to extract from transcription.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - tags_added: List of generated tags
+        - tag_sources: Dict mapping each tag to its source
+        - transcription: Full transcribed text (if available)
+        - emotion: Detected primary emotion (if available)
+        - emotion_confidence: Confidence score for emotion (0-1)
+        - quality_score: MOS quality score (1-5)
+        - processing_time_ms: Total processing time
+
+    Example:
+        auto_tag_audio_asset("local:abc123", transcription_model="small")
+    """
+    return await auto_tag_asset_async(
+        asset_id=asset_id,
+        use_transcription=use_transcription,
+        use_emotion=use_emotion,
+        use_quality=use_quality,
+        transcription_model=transcription_model,
+        max_keywords=max_keywords,
+    )
 
 
 # ============================================================================

@@ -65,6 +65,8 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS engines.
     - [TTS Engine Tools](#tts-engine-tools)
     - [Speech Generation Tools](#speech-generation-tools)
     - [Audio Utility Tools](#audio-utility-tools)
+    - [Audio Asset Management Tools](#audio-asset-management-tools)
+    - [Audio Analysis Tools](#audio-analysis-tools)
   - [TTS Engine Guide](#tts-engine-guide)
     - [Maya1 (Voice Design)](#maya1-voice-design)
     - [Chatterbox (Voice Cloning)](#chatterbox-voice-cloning)
@@ -101,6 +103,13 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS engines.
   - **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
   - **CosyVoice3**: Zero-shot multilingual voice cloning with instruction control (Alibaba, 9 languages)
 - **Audio Utilities**: Format conversion, concatenation, normalization
+- **Audio Asset Management**: Search and organize sound effects, music, and ambience
+  - Index local audio folders with SQLite FTS5 full-text search
+  - Freesound.org integration for Creative Commons licensed sounds
+  - License tracking for proper attribution (CC0, CC-BY, CC-BY-NC, etc.)
+- **Audio Analysis**: Comprehensive audio analysis tools
+  - **Speech Analysis**: Transcription, emotion detection, voice similarity, quality assessment
+  - **SFX Analysis**: Loudness/LUFS, clipping detection, spectral analysis, silence detection
 - **Cross-Platform**: Works on CUDA, MPS (Apple Silicon), and CPU
 
 ## Installation
@@ -325,6 +334,53 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 | `play_audio` | Play audio file with system's default player |
 | `set_output_directory` | Set default directory for saving audio files |
 | `get_output_directory` | Get current default output directory |
+
+### Audio Asset Management Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_asset_sources` | List available asset sources (local, Freesound) |
+| `search_audio_assets` | Search for sound effects, music, and ambience |
+| `get_audio_asset` | Get detailed info about an asset |
+| `download_audio_asset` | Download remote asset to local storage |
+| `import_audio_folder` | Import local audio folder into asset library |
+| `configure_freesound_api` | Configure Freesound.org API key |
+| `set_audio_library_path` | Set custom library storage path |
+| `get_audio_library_path` | Get current library path |
+| `add_asset_tags` | Add tags to an asset for organization |
+| `remove_asset_tags` | Remove tags from an asset |
+| `list_all_asset_tags` | List all tags with usage counts |
+| `list_indexed_audio_folders` | List indexed local folders |
+| `rescan_audio_folder` | Rescan folder for new files |
+| `remove_indexed_audio_folder` | Remove folder from index |
+
+### Audio Analysis Tools
+
+#### Speech Analysis
+
+| Tool | Description |
+|------|-------------|
+| `check_analysis_availability` | Check which speech analysis engines are available |
+| `get_analysis_engines_info` | Get detailed info about all analysis engines |
+| `transcribe_audio` | Transcribe audio to text (99+ languages) |
+| `transcribe_with_timestamps` | Transcribe with word-level timestamps |
+| `verify_tts_output` | Verify TTS audio matches expected text |
+| `analyze_emotion` | Detect emotion in audio (9 emotions) |
+| `analyze_voice_similarity` | Compare two audio files for voice similarity |
+| `extract_voice_embedding` | Get voice embedding vector for comparison |
+| `analyze_speech_quality` | Assess speech quality (MOS score 1-5) |
+| `verify_tts_comprehensive` | Combined verification (text, voice, emotion, quality) |
+
+#### SFX Analysis
+
+| Tool | Description |
+|------|-------------|
+| `check_sfx_analysis_availability` | Check if SFX analysis tools are available |
+| `analyze_audio_loudness` | Measure peak, RMS, LUFS, dynamic range, true peak |
+| `detect_audio_clipping` | Find clipped samples and regions of digital distortion |
+| `analyze_audio_spectrum` | Analyze frequency content, brightness, energy distribution |
+| `detect_audio_silence` | Find leading/trailing silence and gaps in audio |
+| `validate_audio_format` | Validate sample rate, channels, bit depth against targets |
 
 ## TTS Engine Guide
 
