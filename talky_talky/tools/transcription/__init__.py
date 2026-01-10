@@ -18,7 +18,7 @@ Usage:
     result = transcribe(
         audio_path="audio.wav",
         engine="faster_whisper",
-        model_size="base",
+        model_size="large-v3",
     )
 """
 

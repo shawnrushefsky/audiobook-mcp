@@ -57,7 +57,7 @@ class TranscriptionEngineInfo:
     supports_word_timestamps: bool = False
     supports_language_detection: bool = True
     model_sizes: list[str] = field(default_factory=list)
-    default_model_size: str = "base"
+    default_model_size: str = "large-v3"
     extra_info: dict = field(default_factory=dict)
 
 

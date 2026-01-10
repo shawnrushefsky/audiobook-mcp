@@ -875,7 +875,7 @@ def transcribe_audio(
     audio_path: str,
     engine: str = "faster_whisper",
     language: Optional[str] = None,
-    model_size: str = "base",
+    model_size: str = "large-v3",
 ) -> dict:
     """Transcribe audio to text using speech recognition.
 
@@ -889,7 +889,7 @@ def transcribe_audio(
             - whisper: Best accuracy via transformers
             - faster_whisper: 4x faster with same accuracy (recommended)
         language: Language code (e.g., "en", "es", "ja"). Auto-detects if not specified.
-        model_size: Model size (default: "base").
+        model_size: Model size (default: "large-v3" for best accuracy).
             Options: tiny, base, small, medium, large-v3, large-v3-turbo
             Larger models = more accurate but slower.
 
@@ -922,7 +922,7 @@ def transcribe_with_timestamps(
     audio_path: str,
     engine: str = "faster_whisper",
     language: Optional[str] = None,
-    model_size: str = "base",
+    model_size: str = "large-v3",
     word_level: bool = False,
 ) -> dict:
     """Transcribe audio with detailed timing information.
@@ -934,7 +934,7 @@ def transcribe_with_timestamps(
         audio_path: Path to the audio file to transcribe.
         engine: Transcription engine ("whisper" or "faster_whisper").
         language: Language code (auto-detected if not specified).
-        model_size: Model size (tiny, base, small, medium, large-v3, etc.)
+        model_size: Model size (default: "large-v3"). Options: tiny, base, small, medium, large-v3, etc.
         word_level: If True, include word-level timestamps (slower but more precise).
 
     Returns:
@@ -978,7 +978,7 @@ def verify_tts_output(
     audio_path: str,
     expected_text: str,
     engine: str = "faster_whisper",
-    model_size: str = "base",
+    model_size: str = "large-v3",
     similarity_threshold: float = 0.8,
 ) -> dict:
     """Verify that TTS-generated audio contains the expected text.
@@ -990,7 +990,7 @@ def verify_tts_output(
         audio_path: Path to the TTS-generated audio file.
         expected_text: The text that should be in the audio.
         engine: Transcription engine to use (default: "faster_whisper").
-        model_size: Model size (default: "base"). Use "large-v3" for best accuracy.
+        model_size: Model size (default: "large-v3" for best accuracy).
         similarity_threshold: Minimum similarity ratio to consider a match (0.0-1.0).
             Default 0.8 (80% similar). Lower for lenient matching.
 
