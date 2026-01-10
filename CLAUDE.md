@@ -21,6 +21,11 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **Whisper**: OpenAI's robust speech recognition via transformers (99+ languages, MIT license)
 - **Faster-Whisper**: CTranslate2-optimized Whisper (4x faster, same accuracy)
 
+**Audio Analysis Engines (TTS Self-Verification):**
+- **Emotion2vec**: Speech emotion recognition supporting 9 emotions (ACL 2024, ~300M parameters)
+- **Resemblyzer**: Voice similarity comparison using speaker embeddings (~1000x realtime)
+- **NISQA**: Non-intrusive speech quality assessment predicting MOS scores (1-5 scale)
+
 Plus audio utilities for format conversion, concatenation, and normalization.
 
 ## Architecture
@@ -44,6 +49,10 @@ Plus audio utilities for format conversion, concatenation, and normalization.
 - **Transcription Engines**:
   - Whisper (local) - OpenAI's speech recognition via transformers
   - Faster-Whisper (local) - CTranslate2-optimized, 4x faster
+- **Analysis Engines** (TTS self-verification):
+  - Emotion2vec (local) - speech emotion recognition via FunASR
+  - Resemblyzer (local) - voice similarity using speaker embeddings
+  - NISQA (local) - speech quality assessment via TorchMetrics
 
 ### Python Version Requirement
 
@@ -83,11 +92,17 @@ talky_talky/
 │   │   ├── soprano.py    # Soprano engine (ultra-fast)
 │   │   ├── vibevoice.py  # VibeVoice engines (realtime + long-form)
 │   │   └── cosyvoice.py  # CosyVoice3 engine (multilingual)
-│   └── transcription/
+│   ├── transcription/
+│   │   ├── __init__.py   # Public interface, engine registry
+│   │   ├── base.py       # Abstract transcription interfaces
+│   │   ├── whisper.py    # Whisper engine (transformers)
+│   │   └── faster_whisper.py # Faster-Whisper engine (CTranslate2)
+│   └── analysis/
 │       ├── __init__.py   # Public interface, engine registry
-│       ├── base.py       # Abstract transcription interfaces
-│       ├── whisper.py    # Whisper engine (transformers)
-│       └── faster_whisper.py # Faster-Whisper engine (CTranslate2)
+│       ├── base.py       # Abstract analysis interfaces
+│       ├── emotion2vec.py # Emotion detection engine
+│       ├── resemblyzer.py # Voice similarity engine
+│       └── nisqa.py      # Speech quality engine
 └── utils/
     ├── __init__.py
     └── ffmpeg.py         # ffmpeg wrapper functions
@@ -126,6 +141,27 @@ TranscriptionEngineInfo # Engine metadata and capabilities
 register_engine(MyEngine)  # Register new engines
 get_engine("faster_whisper")  # Get engine by ID
 transcribe(audio_path, engine="faster_whisper", **kwargs)  # Unified transcription
+```
+
+### Analysis Engine Architecture
+
+The analysis module provides TTS self-verification capabilities:
+
+```python
+# Base classes in analysis/base.py
+EmotionEngine           # Abstract base for emotion detection
+VoiceSimilarityEngine   # Abstract base for voice comparison
+SpeechQualityEngine     # Abstract base for quality assessment
+
+# Result dataclasses
+EmotionResult           # Emotion detection results with confidence scores
+VoiceSimilarityResult   # Voice comparison with similarity score
+SpeechQualityResult     # MOS score and quality dimensions
+
+# Registry in analysis/__init__.py
+detect_emotion(audio_path, engine="emotion2vec")  # Detect emotion
+compare_voices(audio1, audio2, engine="resemblyzer")  # Compare voices
+assess_quality(audio_path, engine="nisqa")  # Assess quality
 ```
 
 ### Adding New TTS Engines
@@ -450,6 +486,15 @@ print(result)
 - `transcribe_with_timestamps` - Transcribe with word-level timestamps
 - `verify_tts_output` - Verify TTS audio matches expected text (for agent verification)
 
+### Audio Analysis Tools (TTS Self-Verification)
+- `check_analysis_availability` - Check analysis engine status and device info
+- `get_analysis_engines_info` - Get detailed info about all analysis engines
+- `analyze_emotion` - Detect emotion in audio (angry, happy, sad, etc.)
+- `analyze_voice_similarity` - Compare two audio files for voice similarity
+- `extract_voice_embedding` - Get voice embedding vector for storage/comparison
+- `analyze_speech_quality` - Assess speech quality (MOS score, noisiness, etc.)
+- `verify_tts_comprehensive` - Combined verification (emotion, similarity, quality, transcription)
+
 ## TTS Engines
 
 ### Maya1 (Voice Design)
@@ -749,50 +794,173 @@ For English transcription, use .en models (e.g., "base.en") for slightly better 
 - **CPU**: Good performance with int8 quantization
 - **Apple Silicon**: Uses CPU (MPS not directly supported by CTranslate2)
 
+## Audio Analysis Engines
+
+These engines enable agents to self-verify TTS output quality.
+
+### Emotion2vec (Emotion Detection)
+
+State-of-the-art speech emotion recognition using FunASR's emotion2vec_plus_large model.
+
+**Installation:**
+```bash
+pip install funasr modelscope
+# Or with talky-talky:
+pip install talky-talky[emotion2vec]
+```
+
+**Features:**
+- ~300M parameters, trained on 40k hours of speech emotion data
+- 9 emotion categories with confidence scores
+- Works on CUDA, MPS, and CPU
+- ACL 2024 paper
+
+**Supported Emotions:**
+angry, disgusted, fearful, happy, neutral, other, sad, surprised, unknown
+
+**Example Usage:**
+```python
+from talky_talky.tools.analysis import detect_emotion
+
+result = detect_emotion("speech.wav")
+if result.status == "success":
+    print(f"Emotion: {result.primary_emotion} ({result.primary_score:.1%})")
+```
+
+### Resemblyzer (Voice Similarity)
+
+Voice similarity comparison using 256-dimensional speaker embeddings.
+
+**Installation:**
+```bash
+pip install resemblyzer
+# Or with talky-talky:
+pip install talky-talky[resemblyzer]
+```
+
+**Features:**
+- ~1000x realtime on GPU
+- 256-dimensional speaker embeddings
+- Cosine similarity comparison
+- Default threshold: 0.75 for same-speaker determination
+
+**Example Usage:**
+```python
+from talky_talky.tools.analysis import compare_voices
+
+result = compare_voices("reference.wav", "generated.wav")
+if result.status == "success":
+    print(f"Similarity: {result.similarity_score:.1%}")
+    print(f"Same speaker: {result.is_same_speaker}")
+```
+
+### NISQA (Speech Quality Assessment)
+
+Non-Intrusive Speech Quality Assessment predicting MOS scores without reference audio.
+
+**Installation:**
+```bash
+pip install torchmetrics librosa requests
+# Or with talky-talky:
+pip install talky-talky[nisqa]
+```
+
+**Features:**
+- Predicts MOS score (1-5 scale) without reference audio
+- Quality dimensions: noisiness, discontinuity, coloration, loudness
+- Deep CNN with self-attention architecture
+- ~80MB model weights (downloaded on first use)
+
+**Score Interpretation (MOS Scale):**
+- 5.0: Excellent quality
+- 4.0: Good quality
+- 3.0: Fair quality
+- 2.0: Poor quality
+- 1.0: Bad quality
+
+**Quality Dimensions:**
+- **Noisiness**: Background noise level (higher = less noisy)
+- **Discontinuity**: Audio dropouts (higher = more continuous)
+- **Coloration**: Spectral distortion (higher = more natural)
+- **Loudness**: Volume appropriateness (higher = better)
+
+**Example Usage:**
+```python
+from talky_talky.tools.analysis import assess_quality
+
+result = assess_quality("generated.wav")
+if result.status == "success":
+    print(f"Overall MOS: {result.overall_quality:.2f}/5.0")
+    for dim in result.dimensions:
+        print(f"  {dim.name}: {dim.score:.2f}")
+```
+
 ## Installation & Setup
+
+### Platform-Specific Installation (Recommended)
+
+Use platform extras to install all compatible engines for your hardware:
+
+```bash
+# macOS (Apple Silicon or Intel) - excludes CUDA-only engines
+pip install -e ".[macos-full]"        # TTS + transcription + analysis
+pip install -e ".[macos]"             # TTS only
+pip install -e ".[macos-transcription]"  # TTS + transcription
+pip install -e ".[macos-analysis]"    # TTS + analysis
+
+# Linux/Windows with NVIDIA CUDA GPU - includes all engines
+pip install -e ".[linux-cuda-full]"   # TTS + transcription + analysis
+pip install -e ".[linux-cuda]"        # TTS only
+pip install -e ".[linux-cuda-transcription]"  # TTS + transcription
+pip install -e ".[linux-cuda-analysis]"  # TTS + analysis
+
+# CPU-only (no GPU) - same as macOS
+pip install -e ".[cpu-full]"          # TTS + transcription + analysis
+pip install -e ".[cpu]"               # TTS only
+```
+
+### Individual Engine Installation
 
 ```bash
 # Install base package
 pip install -e .
 
-# Install with Maya1 TTS support (requires CUDA GPU)
-pip install -e ".[maya1]"
+# TTS Engines
+pip install -e ".[maya1]"      # Voice design from descriptions
+pip install -e ".[chatterbox]" # Voice cloning (includes Turbo)
+pip install -e ".[mira]"       # Fast voice cloning (CUDA only)
+pip install -e ".[xtts]"       # Multilingual voice cloning
+pip install -e ".[kokoro]"     # 54 pre-built voices (requires espeak-ng)
+pip install -e ".[soprano]"    # Ultra-fast TTS (CUDA only)
 
-# Install with Chatterbox TTS support (voice cloning, includes Turbo)
-pip install -e ".[chatterbox]"
+# Transcription Engines
+pip install -e ".[whisper]"         # OpenAI Whisper via transformers
+pip install -e ".[faster-whisper]"  # 4x faster Whisper
 
-# Install with MiraTTS support (requires CUDA GPU)
-pip install -e ".[mira]"
+# Analysis Engines (TTS self-verification)
+pip install -e ".[emotion2vec]"  # Emotion detection
+pip install -e ".[resemblyzer]"  # Voice similarity
+pip install -e ".[nisqa]"        # Speech quality assessment
 
-# Install with XTTS-v2 support (multilingual)
-pip install -e ".[xtts]"
+# Combined extras
+pip install -e ".[tts]"           # All TTS engines (includes CUDA-only)
+pip install -e ".[transcription]" # All transcription engines
+pip install -e ".[analysis]"      # All analysis engines
 
-# Install with Kokoro support (54 pre-built voices, requires espeak-ng)
-pip install -e ".[kokoro]"
+# Development dependencies
+pip install -e ".[dev]"
+```
 
-# Install with Soprano support (ultra-fast, requires CUDA GPU)
-pip install -e ".[soprano]"
+### Manual Installation (Dependency Conflicts)
 
-# Install all TTS engines (core engines without dependency conflicts)
-pip install -e ".[tts]"
+VibeVoice and CosyVoice have dependency conflicts and require separate installation:
 
-# VibeVoice and CosyVoice require separate installation due to dependencies:
+```bash
 # VibeVoice:
 git clone https://github.com/microsoft/VibeVoice.git && cd VibeVoice && pip install -e .
+
 # CosyVoice:
 git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && pip install -r requirements.txt
-
-# Install with Whisper transcription support (via transformers)
-pip install -e ".[whisper]"
-
-# Install with Faster-Whisper transcription support (4x faster)
-pip install -e ".[faster-whisper]"
-
-# Install all transcription engines
-pip install -e ".[transcription]"
-
-# Install development dependencies
-pip install -e ".[dev]"
 ```
 
 ## Running the Server
@@ -817,9 +985,7 @@ uv run python -m talky_talky.server
    # Example output: /Users/username/.local/bin/uv
    ```
 
-2. On macOS ARM64 (Apple Silicon), use individual extras instead of `--extra tts` to avoid CUDA-only dependencies (`mira`, `soprano`) that don't have macOS wheels:
-
-3. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+2. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
    ```json
    {
      "mcpServers": {
@@ -828,11 +994,7 @@ uv run python -m talky_talky.server
          "args": [
            "run",
            "--directory", "/path/to/talky-talky",
-           "--extra", "maya1",
-           "--extra", "chatterbox",
-           "--extra", "xtts",
-           "--extra", "kokoro",
-           "--extra", "vibevoice",
+           "--extra", "macos-full",
            "talky-talky"
          ]
        }
@@ -840,7 +1002,13 @@ uv run python -m talky_talky.server
    }
    ```
 
-4. Replace paths with actual values and restart Claude Desktop.
+   Available macOS extras:
+   - `macos-full` - All TTS, transcription, and analysis engines
+   - `macos` - TTS engines only
+   - `macos-transcription` - TTS + transcription
+   - `macos-analysis` - TTS + analysis
+
+3. Replace paths with actual values and restart Claude Desktop.
 
 ### Claude Code / CLI Tools
 

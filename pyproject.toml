@@ -88,6 +88,82 @@ cosyvoice = [
 tts = [
     "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
 ]
+
+# =============================================================================
+# Platform-specific extras - choose based on your hardware
+# =============================================================================
+
+# macOS (Apple Silicon or Intel) - excludes CUDA-only engines (mira, soprano)
+macos = [
+    "talky-talky[maya1,chatterbox,xtts,kokoro]",
+]
+# macOS with transcription support
+macos-transcription = [
+    "talky-talky[macos,transcription]",
+]
+# macOS with analysis support (TTS self-verification)
+macos-analysis = [
+    "talky-talky[macos,analysis]",
+]
+# macOS full - all compatible TTS, transcription, and analysis
+macos-full = [
+    "talky-talky[macos,transcription,analysis]",
+]
+
+# Linux/Windows with NVIDIA CUDA GPU - includes all engines
+linux-cuda = [
+    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
+]
+# Linux CUDA with transcription support
+linux-cuda-transcription = [
+    "talky-talky[linux-cuda,transcription]",
+]
+# Linux CUDA with analysis support (TTS self-verification)
+linux-cuda-analysis = [
+    "talky-talky[linux-cuda,analysis]",
+]
+# Linux CUDA full - all TTS engines, transcription, and analysis
+linux-cuda-full = [
+    "talky-talky[linux-cuda,transcription,analysis]",
+]
+
+# CPU-only (no GPU) - same as macOS, excludes CUDA-only engines
+cpu = [
+    "talky-talky[maya1,chatterbox,xtts,kokoro]",
+]
+# CPU with transcription
+cpu-transcription = [
+    "talky-talky[cpu,transcription]",
+]
+# CPU with analysis
+cpu-analysis = [
+    "talky-talky[cpu,analysis]",
+]
+# CPU full - all compatible TTS, transcription, and analysis
+cpu-full = [
+    "talky-talky[cpu,transcription,analysis]",
+]
+# Emotion detection (emotion2vec via FunASR)
+emotion2vec = [
+    "funasr>=1.0.0",
+    "modelscope>=1.9.0",
+    "torch>=2.0.0",
+]
+# Voice similarity (Resemblyzer)
+resemblyzer = [
+    "resemblyzer>=0.1.3",
+]
+# Speech quality assessment (NISQA via TorchMetrics)
+nisqa = [
+    "torchmetrics>=1.0.0",
+    "librosa>=0.10.0",
+    "requests>=2.28.0",
+    "torch>=2.0.0",
+]
+# All analysis engines for TTS self-verification
+analysis = [
+    "talky-talky[emotion2vec,resemblyzer,nisqa]",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",

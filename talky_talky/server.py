@@ -62,6 +62,18 @@ from .tools.transcription import (
     transcribe,
 )
 
+# Import analysis module
+from .tools.analysis import (
+    detect_emotion,
+    compare_voices,
+    get_voice_embedding,
+    assess_quality,
+    list_emotion_engines,
+    list_similarity_engines,
+    list_quality_engines,
+    to_dict as analysis_to_dict,
+)
+
 
 # Server version
 VERSION = "0.2.0"
@@ -226,10 +238,25 @@ def speak_maya1(
     """Generate speech using Maya1 (text-prompted voice design).
 
     Creates audio from text using a natural language voice description.
-    Supports inline emotion tags like <laugh>, <sigh>, <angry>, <whisper>.
+
+    IMPORTANT - USE EMOTION TAGS for expressive speech! Maya1 supports inline tags:
+    - <laugh> or <chuckle> - laughter
+    - <sigh> - sighing
+    - <gasp> - gasping/surprise
+    - <whisper> - whispering
+    - <angry> - angry tone
+    - <excited> - excited tone
+    - <sad> - sad tone
+
+    Example text WITH emotion tags (RECOMMENDED):
+        "Oh my goodness! <gasp> I can't believe it! <laugh> This is amazing!"
+        "I'm so sorry... <sigh> I didn't mean to hurt you. <sad>"
+        "<whisper> Don't tell anyone, but... <excited> we won!"
 
     Args:
-        text: The text to synthesize. Can include emotion tags.
+        text: The text to synthesize. STRONGLY RECOMMENDED: Include emotion tags
+            like <laugh>, <sigh>, <gasp>, <whisper>, <angry>, <excited> to make
+            speech more natural and expressive. Place tags where the emotion occurs.
         output_path: Where to save the generated audio. Can be a full path or just
             a filename (e.g., "speech.wav") which will be saved to the configured
             output directory (default: ~/Documents/talky-talky).
@@ -241,8 +268,6 @@ def speak_maya1(
 
     Returns:
         Dict with status, output_path, duration_ms, sample_rate, and metadata.
-
-    Emotion tags supported: <laugh>, <sigh>, <gasp>, <whisper>, <angry>, <excited>, etc.
     """
     result = generate(
         text=text,
@@ -267,10 +292,29 @@ def speak_chatterbox(
     """Generate speech using Chatterbox (audio-prompted voice cloning).
 
     Clones a voice from reference audio samples with emotion control.
-    Supports paralinguistic tags like [laugh], [cough], [chuckle].
+
+    IMPORTANT - USE PARALINGUISTIC TAGS for natural speech! Known tags include:
+    - [laugh] - laughter
+    - [chuckle] - soft laughter
+    - [cough] - coughing
+    - [sigh] - sighing
+    - [gasp] - gasping
+    - [groan], [yawn], [sniff], [clearing throat], etc. - TRY OTHERS!
+
+    Chatterbox supports MORE tags than documented - experiment with natural sounds
+    like [hmm], [uh], [um], [oh], [ah], [wow], [ooh], [eww], [huh], [mhm], etc.
+
+    Example text WITH tags (RECOMMENDED):
+        "That's hilarious! [laugh] I can't stop laughing!"
+        "Well... [sigh] I suppose you're right. [hmm] Let me think."
+        "[gasp] You scared me! [chuckle] Don't do that again."
+        "So, [um], I was thinking... [clearing throat] we should go."
 
     Args:
-        text: The text to synthesize. Can include emotion tags.
+        text: The text to synthesize. STRONGLY RECOMMENDED: Include paralinguistic
+            tags like [laugh], [sigh], [gasp], [chuckle], [cough] and experiment
+            with others like [hmm], [um], [oh], [yawn], etc. to make speech more
+            natural and human-like. Place tags where the sound should occur.
         output_path: Where to save the generated audio. Can be a full path or just
             a filename (e.g., "speech.wav") which will be saved to the configured
             output directory (default: ~/Documents/talky-talky).
@@ -283,8 +327,6 @@ def speak_chatterbox(
 
     Returns:
         Dict with status, output_path, duration_ms, sample_rate, and metadata.
-
-    Emotion tags supported: [laugh], [chuckle], [cough], [sigh], [gasp]
     """
     result = generate(
         text=text,
@@ -460,10 +502,26 @@ def speak_chatterbox_turbo(
 
     Streamlined 350M model optimized for low-latency voice cloning.
     Faster than standard Chatterbox with simpler API (no tuning parameters).
-    Supports paralinguistic tags like [laugh], [chuckle], [cough].
+
+    IMPORTANT - USE PARALINGUISTIC TAGS for natural speech! Known tags include:
+    - [laugh] - laughter
+    - [chuckle] - soft laughter
+    - [cough] - coughing
+    - [sigh], [gasp], [groan], [yawn], [sniff], etc. - TRY OTHERS!
+
+    Chatterbox supports MORE tags than documented - experiment with natural sounds
+    like [hmm], [uh], [um], [oh], [ah], [wow], [ooh], [eww], [huh], [mhm], etc.
+
+    Example text WITH tags (RECOMMENDED):
+        "That joke was great! [laugh] Tell me another one."
+        "Sorry, I'm getting over a cold. [cough] Where were we?"
+        "[hmm] Let me think about that... [oh] I've got it!"
 
     Args:
-        text: The text to synthesize. Can include emotion tags.
+        text: The text to synthesize. STRONGLY RECOMMENDED: Include paralinguistic
+            tags like [laugh], [chuckle], [cough], [sigh] and experiment with others
+            like [hmm], [um], [oh], [yawn], etc. to make speech more natural and
+            human-like. Place tags where the sound should occur.
         output_path: Where to save the generated audio. Can be a full path or just
             a filename (e.g., "speech.wav") which will be saved to the configured
             output directory (default: ~/Documents/talky-talky).
@@ -472,8 +530,6 @@ def speak_chatterbox_turbo(
 
     Returns:
         Dict with status, output_path, duration_ms, sample_rate, and metadata.
-
-    Emotion tags supported: [laugh], [chuckle], [cough]
 
     Note: For more control over expressiveness and pacing, use speak_chatterbox
     which has exaggeration and cfg_weight parameters.
@@ -570,8 +626,18 @@ def speak_cosyvoice(
     Alibaba's zero-shot voice cloning with 9 languages and instruction control.
     Excellent for multilingual content and dialect control.
 
+    IMPORTANT - USE [breath] TAGS for natural speech! CosyVoice supports:
+    - [breath] - natural breathing sounds between phrases
+
+    Example text WITH tags (RECOMMENDED):
+        "Hello everyone. [breath] Welcome to today's presentation."
+        "That was a long journey... [breath] I'm glad we finally made it."
+        "Let me think about that. [breath] Yes, I believe you're right."
+
     Args:
-        text: The text to synthesize. Can include [breath] tags for breathing sounds.
+        text: The text to synthesize. STRONGLY RECOMMENDED: Include [breath] tags
+            between sentences or phrases for more natural, human-like speech.
+            Place tags where a natural pause/breath would occur.
         output_path: Where to save the generated audio. Can be a full path or just
             a filename (e.g., "speech.wav") which will be saved to the configured
             output directory (default: ~/Documents/talky-talky).
@@ -590,7 +656,6 @@ def speak_cosyvoice(
     - 9 languages: Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
     - 18+ Chinese dialects via instruction control
     - Cross-lingual cloning (clone voice in one language, output in another)
-    - [breath] tags for fine-grained breathing control
     """
     result = generate(
         text=text,
@@ -1079,6 +1144,410 @@ def verify_tts_output(
             "processing_time_ms": transcription_result.processing_time_ms,
         },
     }
+
+
+# ============================================================================
+# Audio Analysis Tools
+# ============================================================================
+
+
+@mcp.tool()
+def check_analysis_availability() -> dict:
+    """Check if audio analysis engines are available and properly configured.
+
+    Returns status of three analysis capabilities:
+    - Emotion detection (emotion2vec)
+    - Voice similarity (Resemblyzer)
+    - Speech quality assessment (NISQA)
+
+    Returns:
+        Dict with available engines and their status.
+    """
+    emotion_engines = list_emotion_engines()
+    similarity_engines = list_similarity_engines()
+    quality_engines = list_quality_engines()
+
+    return {
+        "emotion_detection": {
+            "available": len(emotion_engines) > 0,
+            "engines": list(emotion_engines.keys()),
+        },
+        "voice_similarity": {
+            "available": len(similarity_engines) > 0,
+            "engines": list(similarity_engines.keys()),
+        },
+        "speech_quality": {
+            "available": len(quality_engines) > 0,
+            "engines": list(quality_engines.keys()),
+        },
+    }
+
+
+@mcp.tool()
+def get_analysis_engines_info() -> dict:
+    """Get detailed information about all audio analysis engines.
+
+    Returns info for each category:
+    - Emotion detection engines
+    - Voice similarity engines
+    - Speech quality engines
+
+    Each engine includes description, requirements, and capabilities.
+    """
+    return {
+        "emotion_detection": {
+            engine_id: {
+                "name": info.name,
+                "description": info.description,
+                "requirements": info.requirements,
+                "supported_emotions": info.supported_emotions,
+            }
+            for engine_id, info in list_emotion_engines().items()
+        },
+        "voice_similarity": {
+            engine_id: {
+                "name": info.name,
+                "description": info.description,
+                "requirements": info.requirements,
+                "embedding_dim": info.embedding_dim,
+                "default_threshold": info.default_threshold,
+            }
+            for engine_id, info in list_similarity_engines().items()
+        },
+        "speech_quality": {
+            engine_id: {
+                "name": info.name,
+                "description": info.description,
+                "requirements": info.requirements,
+                "quality_dimensions": info.quality_dimensions,
+                "score_range": info.score_range,
+            }
+            for engine_id, info in list_quality_engines().items()
+        },
+    }
+
+
+@mcp.tool()
+def analyze_emotion(
+    audio_path: str,
+    engine: str = "emotion2vec",
+) -> dict:
+    """Detect emotion in audio using speech emotion recognition.
+
+    Use this to verify the emotional tone of TTS output matches intent.
+    Supports 9 emotions: angry, disgusted, fearful, happy, neutral, other, sad, surprised, unknown.
+
+    Args:
+        audio_path: Path to the audio file to analyze.
+        engine: Emotion detection engine (default: "emotion2vec").
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - primary_emotion: Highest scoring emotion
+        - primary_score: Confidence score (0-1)
+        - all_emotions: List of all emotions with scores
+        - processing_time_ms: Analysis time
+
+    Example:
+        # Verify TTS with angry emotion tag sounds angry
+        result = analyze_emotion("angry_speech.wav")
+        if result["primary_emotion"] == "angry":
+            print("Emotion verified!")
+    """
+    result = detect_emotion(audio_path, engine=engine)
+    return analysis_to_dict(result)
+
+
+@mcp.tool()
+def analyze_voice_similarity(
+    audio_path_1: str,
+    audio_path_2: str,
+    threshold: float = 0.75,
+    engine: str = "resemblyzer",
+) -> dict:
+    """Compare two audio files for voice similarity.
+
+    Use this to verify voice cloning quality by comparing generated audio
+    to the reference voice sample.
+
+    Args:
+        audio_path_1: Path to first audio file (e.g., reference voice).
+        audio_path_2: Path to second audio file (e.g., generated TTS).
+        threshold: Similarity threshold for same-speaker determination (default: 0.75).
+            - 0.75+: Likely same speaker
+            - 0.60-0.75: Possibly same speaker
+            - <0.60: Likely different speakers
+        engine: Voice similarity engine (default: "resemblyzer").
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - similarity_score: Cosine similarity (0-1)
+        - is_same_speaker: True if above threshold
+        - threshold_used: The threshold applied
+        - processing_time_ms: Analysis time
+
+    Example:
+        # Verify voice cloning quality
+        result = analyze_voice_similarity("reference.wav", "generated.wav")
+        if result["is_same_speaker"]:
+            print(f"Voice match! Similarity: {result['similarity_score']:.1%}")
+    """
+    result = compare_voices(audio_path_1, audio_path_2, threshold=threshold, engine=engine)
+    return analysis_to_dict(result)
+
+
+@mcp.tool()
+def extract_voice_embedding(
+    audio_path: str,
+    engine: str = "resemblyzer",
+) -> dict:
+    """Extract a voice embedding vector from audio.
+
+    Voice embeddings are 256-dimensional vectors that capture speaker characteristics.
+    Store embeddings to efficiently compare against multiple audio files later.
+
+    Args:
+        audio_path: Path to audio file (5-30 seconds of speech recommended).
+        engine: Voice similarity engine (default: "resemblyzer").
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - embedding: List of 256 float values
+        - embedding_dim: Dimension (256)
+        - processing_time_ms: Extraction time
+
+    Example:
+        # Extract reference embedding once, compare many times
+        ref_result = extract_voice_embedding("reference.wav")
+        ref_embedding = ref_result["embedding"]
+        # Store ref_embedding for later comparisons
+    """
+    result = get_voice_embedding(audio_path, engine=engine)
+    return analysis_to_dict(result)
+
+
+@mcp.tool()
+def analyze_speech_quality(
+    audio_path: str,
+    engine: str = "nisqa",
+) -> dict:
+    """Assess speech quality and naturalness of audio.
+
+    Predicts Mean Opinion Score (MOS) and quality dimensions without
+    needing reference audio. Use this to verify TTS output quality.
+
+    Args:
+        audio_path: Path to audio file to assess.
+        engine: Speech quality engine (default: "nisqa").
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - overall_quality: MOS score (1-5 scale)
+        - dimensions: List of quality dimensions:
+            - overall: Overall MOS prediction
+            - noisiness: Background noise level
+            - discontinuity: Audio dropouts/glitches
+            - coloration: Spectral distortion
+            - loudness: Volume appropriateness
+        - processing_time_ms: Assessment time
+
+    Score interpretation (MOS scale):
+    - 5.0: Excellent quality
+    - 4.0: Good quality
+    - 3.0: Fair quality
+    - 2.0: Poor quality
+    - 1.0: Bad quality
+
+    Example:
+        result = analyze_speech_quality("generated.wav")
+        if result["overall_quality"] >= 3.5:
+            print("Quality acceptable!")
+    """
+    result = assess_quality(audio_path, engine=engine)
+    return analysis_to_dict(result)
+
+
+@mcp.tool()
+def verify_tts_comprehensive(
+    generated_audio_path: str,
+    expected_text: str,
+    reference_audio_path: Optional[str] = None,
+    expected_emotion: Optional[str] = None,
+    min_quality_score: float = 3.0,
+    min_similarity_score: float = 0.70,
+    min_text_similarity: float = 0.8,
+) -> dict:
+    """Comprehensive TTS output verification combining all analysis tools.
+
+    Performs multiple checks on generated TTS audio:
+    1. Text accuracy: Transcribes and compares to expected text
+    2. Voice similarity: Compares to reference audio (if provided)
+    3. Emotion match: Verifies emotional tone (if expected_emotion specified)
+    4. Speech quality: Checks naturalness and technical quality
+
+    Args:
+        generated_audio_path: Path to the generated TTS audio.
+        expected_text: The text that should be in the audio.
+        reference_audio_path: Optional reference audio for voice comparison.
+        expected_emotion: Optional expected emotion (e.g., "happy", "angry").
+        min_quality_score: Minimum acceptable MOS score (default: 3.0).
+        min_similarity_score: Minimum voice similarity (default: 0.70).
+        min_text_similarity: Minimum text match ratio (default: 0.8).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - overall_pass: True if all enabled checks pass
+        - checks: Dict with results of each check:
+            - text_accuracy: Text transcription comparison
+            - voice_similarity: Voice match (if reference provided)
+            - emotion_match: Emotion detection (if expected_emotion provided)
+            - speech_quality: MOS and quality dimensions
+        - recommendations: List of suggestions for improvements
+
+    Example:
+        result = verify_tts_comprehensive(
+            generated_audio_path="output.wav",
+            expected_text="Hello, how are you today?",
+            reference_audio_path="reference_voice.wav",
+            expected_emotion="happy",
+        )
+        if result["overall_pass"]:
+            print("TTS output verified!")
+        else:
+            for rec in result["recommendations"]:
+                print(f"- {rec}")
+    """
+    results = {
+        "status": "success",
+        "overall_pass": True,
+        "checks": {},
+        "recommendations": [],
+    }
+
+    # 1. Text accuracy check
+    from difflib import SequenceMatcher
+
+    transcription_result = transcribe(
+        audio_path=generated_audio_path,
+        engine="faster_whisper",
+        model_size="large-v3",
+    )
+
+    if transcription_result.status == "success":
+        # Normalize texts
+        import re
+
+        def normalize(text):
+            text = text.lower()
+            text = re.sub(r"[^\w\s']", "", text)
+            return re.sub(r"\s+", " ", text).strip()
+
+        expected_norm = normalize(expected_text)
+        transcribed_norm = normalize(transcription_result.text)
+        similarity = SequenceMatcher(None, expected_norm, transcribed_norm).ratio()
+
+        text_pass = similarity >= min_text_similarity
+        results["checks"]["text_accuracy"] = {
+            "pass": text_pass,
+            "similarity": round(similarity, 3),
+            "threshold": min_text_similarity,
+            "expected": expected_norm,
+            "transcribed": transcribed_norm,
+        }
+        if not text_pass:
+            results["overall_pass"] = False
+            results["recommendations"].append(
+                f"Text accuracy ({similarity:.1%}) below threshold ({min_text_similarity:.1%}). "
+                "Check TTS pronunciation or try a different voice."
+            )
+    else:
+        results["checks"]["text_accuracy"] = {
+            "pass": False,
+            "error": transcription_result.error,
+        }
+        results["overall_pass"] = False
+
+    # 2. Voice similarity check (if reference provided)
+    if reference_audio_path:
+        similarity_result = compare_voices(
+            reference_audio_path,
+            generated_audio_path,
+            threshold=min_similarity_score,
+        )
+        if similarity_result.status == "success":
+            voice_pass = similarity_result.similarity_score >= min_similarity_score
+            results["checks"]["voice_similarity"] = {
+                "pass": voice_pass,
+                "similarity": round(similarity_result.similarity_score, 3),
+                "threshold": min_similarity_score,
+            }
+            if not voice_pass:
+                results["overall_pass"] = False
+                results["recommendations"].append(
+                    f"Voice similarity ({similarity_result.similarity_score:.1%}) below threshold. "
+                    "Try longer reference audio or different TTS settings."
+                )
+        else:
+            results["checks"]["voice_similarity"] = {
+                "pass": False,
+                "error": similarity_result.error,
+            }
+
+    # 3. Emotion check (if expected emotion provided)
+    if expected_emotion:
+        emotion_result = detect_emotion(generated_audio_path)
+        if emotion_result.status == "success":
+            emotion_match = emotion_result.primary_emotion.lower() == expected_emotion.lower()
+            results["checks"]["emotion_match"] = {
+                "pass": emotion_match,
+                "expected": expected_emotion.lower(),
+                "detected": emotion_result.primary_emotion,
+                "confidence": round(emotion_result.primary_score, 3)
+                if emotion_result.primary_score
+                else None,
+            }
+            if not emotion_match:
+                results["overall_pass"] = False
+                results["recommendations"].append(
+                    f"Expected '{expected_emotion}' but detected '{emotion_result.primary_emotion}'. "
+                    "Try adjusting emotion tags or voice parameters."
+                )
+        else:
+            results["checks"]["emotion_match"] = {
+                "pass": False,
+                "error": emotion_result.error,
+            }
+
+    # 4. Speech quality check
+    quality_result = assess_quality(generated_audio_path)
+    if quality_result.status == "success":
+        quality_pass = quality_result.overall_quality >= min_quality_score
+        results["checks"]["speech_quality"] = {
+            "pass": quality_pass,
+            "overall_mos": round(quality_result.overall_quality, 2),
+            "threshold": min_quality_score,
+            "dimensions": {dim.name: round(dim.score, 2) for dim in quality_result.dimensions},
+        }
+        if not quality_pass:
+            results["overall_pass"] = False
+            # Find lowest dimension for specific feedback
+            lowest = min(quality_result.dimensions, key=lambda d: d.score)
+            results["recommendations"].append(
+                f"Speech quality ({quality_result.overall_quality:.2f}) below threshold ({min_quality_score}). "
+                f"Lowest dimension: {lowest.name} ({lowest.score:.2f})."
+            )
+    else:
+        results["checks"]["speech_quality"] = {
+            "pass": False,
+            "error": quality_result.error,
+        }
+
+    return results
 
 
 # ============================================================================
