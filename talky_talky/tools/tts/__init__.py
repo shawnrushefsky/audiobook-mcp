@@ -48,6 +48,7 @@ from .soprano import SopranoEngine
 from .chatterbox_turbo import ChatterboxTurboEngine
 from .vibevoice import VibeVoiceRealtimeEngine, VibeVoiceLongformEngine
 from .cosyvoice import CosyVoice3Engine
+from .seamlessm4t import SeamlessM4TEngine
 
 
 # ============================================================================
@@ -368,6 +369,7 @@ register_engine(ChatterboxTurboEngine)
 register_engine(VibeVoiceRealtimeEngine)
 register_engine(VibeVoiceLongformEngine)
 register_engine(CosyVoice3Engine)
+register_engine(SeamlessM4TEngine)
 
 
 # ============================================================================
@@ -408,4 +410,5 @@ __all__ = [
     "VibeVoiceRealtimeEngine",
     "VibeVoiceLongformEngine",
     "CosyVoice3Engine",
+    "SeamlessM4TEngine",
 ]

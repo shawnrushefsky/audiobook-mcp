@@ -16,6 +16,7 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **VibeVoice Realtime**: Real-time TTS with ~300ms latency, single speaker (Microsoft, 0.5B)
 - **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
 - **CosyVoice3**: Zero-shot multilingual voice cloning with 9 languages (Alibaba, 0.5B)
+- **SeamlessM4T v2**: Multilingual TTS with translation support (Meta, 2.3B, 35 languages, CC-BY-NC-4.0)
 
 **Transcription Engines (Speech-to-Text):**
 - **Whisper**: OpenAI's robust speech recognition via transformers (99+ languages, MIT license)
@@ -31,7 +32,7 @@ Talky Talky is a Model Context Protocol (MCP) server that provides Text-to-Speec
 - **Freesound.org**: Search and download Creative Commons licensed sounds
 - **License Tracking**: CC0, CC-BY, CC-BY-NC, CC-BY-SA, Sampling+ attribution
 
-Plus audio utilities for format conversion, concatenation, and normalization.
+Plus audio utilities for format conversion, concatenation, normalization, trimming, silence insertion, crossfade joining, and audio design (mixing, effects, overlays).
 
 ## Architecture
 
@@ -51,6 +52,7 @@ Plus audio utilities for format conversion, concatenation, and normalization.
   - VibeVoice Realtime (local) - real-time TTS with ~300ms latency
   - VibeVoice Long-form (local) - multi-speaker long-form TTS
   - CosyVoice3 (local) - multilingual voice cloning with instruction control
+  - SeamlessM4T v2 (local) - multilingual TTS with translation (35 languages)
 - **Transcription Engines**:
   - Whisper (local) - OpenAI's speech recognition via transformers
   - Faster-Whisper (local) - CTranslate2-optimized, 4x faster
@@ -96,7 +98,8 @@ talky_talky/
 │   │   ├── kokoro.py     # Kokoro engine (voice selection)
 │   │   ├── soprano.py    # Soprano engine (ultra-fast)
 │   │   ├── vibevoice.py  # VibeVoice engines (realtime + long-form)
-│   │   └── cosyvoice.py  # CosyVoice3 engine (multilingual)
+│   │   ├── cosyvoice.py  # CosyVoice3 engine (multilingual)
+│   │   └── seamlessm4t.py # SeamlessM4T v2 engine (multilingual + translation)
 │   ├── transcription/
 │   │   ├── __init__.py   # Public interface, engine registry
 │   │   ├── base.py       # Abstract transcription interfaces
@@ -478,16 +481,28 @@ print(result)
 - `speak_vibevoice_realtime` - Real-time TTS with ~300ms latency
 - `speak_vibevoice_longform` - Long-form multi-speaker TTS (up to 90 min)
 - `speak_cosyvoice` - Multilingual voice cloning with instruction control
+- `speak_seamlessm4t` - Multilingual TTS with translation (35 languages, 200 speakers)
 
 ### Audio Utility Tools
 - `get_audio_file_info` - Get audio file info (duration, format, size)
 - `convert_audio_format` - Convert between formats (wav, mp3, m4a)
-- `join_audio_files` - Concatenate multiple audio files
+- `join_audio_files` - Concatenate multiple audio files (supports gap_ms for silence between segments)
 - `normalize_audio_levels` - Normalize to broadcast standard
 - `check_ffmpeg_available` - Check ffmpeg installation
 - `play_audio` - Play audio file with system's default player
 - `set_output_directory` - Set default directory for saving audio files
 - `get_output_directory` - Get current default output directory
+- `trim_audio_file` - Trim audio with auto-detect mode for silence removal
+- `batch_analyze_silence` - Batch silence detection for multiple files
+- `insert_audio_silence` - Add controlled silence before/after audio
+- `crossfade_join_audio` - Concatenate with smooth crossfade transitions
+
+### Audio Design Tools
+- `mix_audio_tracks` - Layer/mix multiple audio tracks together
+- `adjust_audio_volume` - Adjust volume (multiplier or dB)
+- `apply_audio_fade` - Apply fade in/out effects
+- `apply_audio_effects` - Apply effects (EQ, reverb, echo, speed)
+- `overlay_audio_track` - Overlay audio at specific position
 
 ### Transcription Tools
 - `check_transcription_availability` - Check transcription engine status and device info
@@ -744,6 +759,44 @@ pip install -r requirements.txt
 **Instruction Examples:**
 - `"请用广东话表达。"` - Speak in Cantonese
 - `"请用尽可能快地语速说。"` - Speak as fast as possible
+
+### SeamlessM4T v2 (Multilingual TTS with Translation)
+
+Meta's 2.3B parameter multilingual model with 35 languages for speech output.
+
+**Installation:**
+```bash
+pip install transformers sentencepiece torch
+# Or with talky-talky:
+pip install talky-talky[seamlessm4t]
+```
+
+**Features:**
+- 35 languages for speech output
+- 200 different speaker voices (speaker_id 0-199)
+- Translation + TTS in one step (set different src_language and language)
+- High quality multilingual synthesis
+- Works on CUDA, MPS, and CPU
+
+**Languages (35):**
+English, Spanish, French, German, Italian, Portuguese, Polish, Dutch, Russian,
+Ukrainian, Turkish, Arabic, Chinese, Japanese, Korean, Hindi, Bengali, Thai,
+Vietnamese, Indonesian, Malay, Tagalog, Swahili, Hebrew, Persian, Romanian,
+Hungarian, Czech, Greek, Swedish, Danish, Finnish, Norwegian, Slovak, Bulgarian
+
+**Parameters:**
+- `language`: Target language code for speech output (default: "en")
+- `src_language`: Source text language (for translation, default: same as language)
+- `speaker_id`: Speaker voice index 0-199 (default: 0)
+
+**Translation Example:**
+```python
+# Translate English to French speech
+speak_seamlessm4t("Hello world", "bonjour.wav",
+                  src_language="en", language="fr")
+```
+
+**License:** CC-BY-NC-4.0 (non-commercial use only)
 
 ## Transcription Engines
 

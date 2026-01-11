@@ -84,9 +84,17 @@ cosyvoice = [
     "torchaudio>=2.0.0",
     # Note: Full CosyVoice requires cloning the repo and installing requirements.txt
 ]
+# SeamlessM4T v2 support (multilingual TTS with translation)
+# Meta's 2.3B parameter model with 35 languages for speech output
+# License: CC-BY-NC-4.0 (non-commercial use only)
+seamlessm4t = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "sentencepiece>=0.1.99",
+]
 # All TTS engines (core engines without dependency conflicts)
 tts = [
-    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
+    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano,seamlessm4t]",
 ]
 
 # =============================================================================
@@ -95,7 +103,7 @@ tts = [
 
 # macOS (Apple Silicon or Intel) - excludes CUDA-only engines (mira, soprano)
 macos = [
-    "talky-talky[maya1,chatterbox,xtts,kokoro]",
+    "talky-talky[maya1,chatterbox,xtts,kokoro,seamlessm4t]",
 ]
 # macOS with transcription support
 macos-transcription = [
@@ -112,7 +120,7 @@ macos-full = [
 
 # Linux/Windows with NVIDIA CUDA GPU - includes all engines
 linux-cuda = [
-    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano]",
+    "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano,seamlessm4t]",
 ]
 # Linux CUDA with transcription support
 linux-cuda-transcription = [
@@ -129,7 +137,7 @@ linux-cuda-full = [
 
 # CPU-only (no GPU) - same as macOS, excludes CUDA-only engines
 cpu = [
-    "talky-talky[maya1,chatterbox,xtts,kokoro]",
+    "talky-talky[maya1,chatterbox,xtts,kokoro,seamlessm4t]",
 ]
 # CPU with transcription
 cpu-transcription = [

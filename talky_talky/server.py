@@ -57,6 +57,15 @@ from .tools.audio import (
     concatenate_audio,
     normalize_audio,
     is_ffmpeg_available,
+    trim_audio,
+    batch_detect_silence,
+    insert_silence,
+    crossfade_join,
+    mix_audio,
+    adjust_volume,
+    apply_fade,
+    apply_effects,
+    overlay_audio,
 )
 
 # Import transcription module
@@ -354,7 +363,9 @@ def speak_chatterbox(
         reference_audio_paths: Paths to reference audio files for voice cloning.
             At least one required. 10+ seconds of clear speech recommended.
         exaggeration: Controls speech expressiveness (0.0-1.0+, default 0.5).
-            0.0 = flat/monotone, 0.5 = natural, 0.7+ = dramatic.
+            0.0 = flat/monotone, 0.5 = natural, 0.6-0.8 = expressive (recommended),
+            0.8+ = dramatic. Note: Default 0.5 can sound flat; try 0.6-0.7 for
+            natural expressiveness.
         cfg_weight: Controls pacing/adherence to reference (0.0-1.0, default 0.5).
             Lower values = slower, more deliberate speech.
 
@@ -702,6 +713,66 @@ def speak_cosyvoice(
     return to_dict(result)
 
 
+@mcp.tool()
+def speak_seamlessm4t(
+    text: str,
+    output_path: str,
+    language: str = "en",
+    src_language: Optional[str] = None,
+    speaker_id: int = 0,
+) -> dict:
+    """Generate speech using SeamlessM4T v2 (multilingual TTS with translation).
+
+    Meta's 2.3B parameter multilingual model supporting 35 languages for speech
+    output with optional translation. Can translate text while generating speech.
+
+    Args:
+        text: The text to synthesize.
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "speech.wav") which will be saved to the configured
+            output directory (default: ~/Documents/talky-talky).
+        language: Target language code for speech output (default: "en").
+            Supported: en, es, fr, de, it, pt, pl, nl, ru, uk, tr, ar, zh, ja, ko,
+            hi, bn, th, vi, id, ms, tl, sw, he, fa, ro, hu, cs, el, sv, da, fi, no, sk, bg
+        src_language: Source text language code (default: same as language).
+            Set different from language to translate while synthesizing speech.
+            Example: src_language="en", language="fr" translates English to French speech.
+        speaker_id: Speaker voice index (0-199, default: 0).
+            Different IDs produce different voice characteristics.
+
+    Returns:
+        Dict with status, output_path, duration_ms, sample_rate, and metadata.
+
+    Features:
+    - 35 languages for speech output
+    - 200 different speaker voices
+    - Translation + TTS in one step (set different src_language and language)
+    - High quality multilingual synthesis
+
+    License: CC-BY-NC-4.0 (non-commercial use only)
+
+    Examples:
+        # Pure English TTS
+        speak_seamlessm4t("Hello world", "hello.wav", language="en")
+
+        # Spanish TTS
+        speak_seamlessm4t("Hola mundo", "hola.wav", language="es")
+
+        # Translate English to French speech
+        speak_seamlessm4t("Hello world", "bonjour.wav",
+                         src_language="en", language="fr")
+    """
+    result = generate(
+        text=text,
+        output_path=resolve_output_path(output_path),
+        engine="seamlessm4t",
+        language=language,
+        src_language=src_language,
+        speaker_id=speaker_id,
+    )
+    return to_dict(result)
+
+
 # ============================================================================
 # Audio Utility Tools
 # ============================================================================
@@ -751,6 +822,7 @@ def join_audio_files(
     audio_paths: list[str],
     output_path: str,
     output_format: str = "mp3",
+    gap_ms: float = 0,
 ) -> dict:
     """Concatenate multiple audio files into one.
 
@@ -758,6 +830,8 @@ def join_audio_files(
         audio_paths: List of paths to audio files to concatenate (in order).
         output_path: Path for the output file.
         output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'mp3'.
+        gap_ms: Milliseconds of silence to insert between segments. Default: 0.
+            Common values: 300ms between dialogue lines, 800ms for scene breaks.
 
     Returns:
         Dict with output_path, input_count, total_duration_ms, and output_format.
@@ -766,6 +840,7 @@ def join_audio_files(
         audio_paths=audio_paths,
         output_path=output_path,
         output_format=output_format,
+        gap_ms=gap_ms,
     )
     return to_dict(result)
 
@@ -911,6 +986,468 @@ def play_audio(audio_path: str) -> dict:
             "status": "error",
             "message": f"Failed to play audio: {e}",
         }
+
+
+@mcp.tool()
+def trim_audio_file(
+    input_path: str,
+    output_path: Optional[str] = None,
+    start_ms: Optional[float] = None,
+    end_ms: Optional[float] = None,
+    padding_ms: float = 50,
+) -> dict:
+    """Trim audio to specified boundaries or auto-detect content boundaries.
+
+    If start_ms and end_ms are not provided, uses silence detection to
+    automatically find content boundaries and trims to those. This is
+    ideal for removing variable leading/trailing silence from TTS output.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_trimmed' suffix in the same directory.
+        start_ms: Start time in milliseconds (None = auto-detect from silence).
+        end_ms: End time in milliseconds (None = auto-detect from silence).
+        padding_ms: Milliseconds of silence to keep as buffer when auto-detecting.
+            Default: 50ms. Set to 0 for tight trim, higher for more natural pauses.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Trimmed file path
+        - original_duration_ms: Original file duration
+        - trimmed_duration_ms: New file duration
+        - start_ms: Trim start point used
+        - end_ms: Trim end point used
+        - silence_removed_ms: Amount of audio removed
+        - auto_detected: Whether boundaries were auto-detected
+
+    Example:
+        # Auto-trim TTS output to remove leading/trailing silence
+        result = trim_audio_file("tts_output.wav", padding_ms=50)
+
+        # Manual trim to specific segment
+        result = trim_audio_file("audio.wav", start_ms=1000, end_ms=5000)
+    """
+    result = trim_audio(
+        input_path=input_path,
+        output_path=output_path,
+        start_ms=start_ms,
+        end_ms=end_ms,
+        padding_ms=padding_ms,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def batch_analyze_silence(
+    audio_paths: list[str],
+    threshold_db: float = -40.0,
+    min_silence_ms: float = 100.0,
+) -> dict:
+    """Detect silence in multiple audio files at once.
+
+    More efficient than calling detect_audio_silence individually for
+    large batches of files (e.g., 200+ audiobook segments).
+
+    Args:
+        audio_paths: List of paths to audio files to analyze.
+        threshold_db: dB threshold below which audio is silent (default -40).
+        min_silence_ms: Minimum duration to count as silence (default 100ms).
+
+    Returns:
+        Dict with:
+        - status: "success"
+        - count: Number of files analyzed
+        - results: List of silence analysis for each file, containing:
+            - path: The input file path
+            - status: "success" or "error"
+            - leading_silence_ms: Silence at start
+            - trailing_silence_ms: Silence at end
+            - content_start_ms: Where actual content begins
+            - content_end_ms: Where actual content ends
+            - content_duration_ms: Duration of non-silent content
+
+    Example:
+        # Analyze all segments in a batch
+        result = batch_analyze_silence([
+            "segment_001.wav",
+            "segment_002.wav",
+            "segment_003.wav",
+        ])
+        for r in result["results"]:
+            print(f"{r['path']}: content from {r['content_start_ms']}ms to {r['content_end_ms']}ms")
+    """
+    results = batch_detect_silence(
+        audio_paths=audio_paths,
+        threshold_db=threshold_db,
+        min_silence_ms=min_silence_ms,
+    )
+    return {
+        "status": "success",
+        "count": len(results),
+        "results": results,
+    }
+
+
+@mcp.tool()
+def insert_audio_silence(
+    input_path: str,
+    output_path: Optional[str] = None,
+    before_ms: float = 0,
+    after_ms: float = 0,
+) -> dict:
+    """Add silence before and/or after an audio file.
+
+    Useful for adding consistent gaps between segments in audiobook production.
+    Use after trimming to add controlled pauses.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_padded' suffix in the same directory.
+        before_ms: Milliseconds of silence to add before audio. Default: 0.
+        after_ms: Milliseconds of silence to add after audio. Default: 0.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Padded file path
+        - original_duration_ms: Original file duration
+        - new_duration_ms: New file duration
+        - silence_before_ms: Silence added before
+        - silence_after_ms: Silence added after
+
+    Example:
+        # Add scene break silence
+        result = insert_audio_silence("scene_end.wav", after_ms=800)
+
+        # Add dialogue pause before and after
+        result = insert_audio_silence("line.wav", before_ms=300, after_ms=300)
+    """
+    result = insert_silence(
+        input_path=input_path,
+        output_path=output_path,
+        before_ms=before_ms,
+        after_ms=after_ms,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def crossfade_join_audio(
+    audio_paths: list[str],
+    output_path: str,
+    crossfade_ms: float = 50,
+    output_format: str = "wav",
+) -> dict:
+    """Concatenate audio files with smooth crossfade transitions.
+
+    Creates seamless transitions between audio segments by overlapping
+    and fading between them. Useful for scene transitions or joining
+    audio that would otherwise have abrupt cuts.
+
+    Args:
+        audio_paths: List of paths to audio files to concatenate (in order).
+        output_path: Path for the output file.
+        crossfade_ms: Duration of crossfade overlap in milliseconds. Default: 50ms.
+            - 20-50ms: Subtle, good for dialogue joins
+            - 50-100ms: Noticeable, good for scene transitions
+            - 100-200ms: Smooth, good for music transitions
+        output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'wav'.
+
+    Returns:
+        Dict with:
+        - output_path: Path to output file
+        - input_count: Number of files joined
+        - total_duration_ms: Duration of output
+        - crossfade_ms: Crossfade duration used
+        - output_format: Format of output
+
+    Example:
+        # Join scene segments with smooth transitions
+        result = crossfade_join_audio(
+            ["scene1.wav", "scene2.wav", "scene3.wav"],
+            "chapter.wav",
+            crossfade_ms=100
+        )
+    """
+    result = crossfade_join(
+        audio_paths=audio_paths,
+        output_path=output_path,
+        crossfade_ms=crossfade_ms,
+        output_format=output_format,
+    )
+    return to_dict(result)
+
+
+# ============================================================================
+# Audio Design Tools
+# ============================================================================
+
+
+@mcp.tool()
+def mix_audio_tracks(
+    audio_paths: list[str],
+    output_path: str,
+    volumes: Optional[list[float]] = None,
+    normalize: bool = True,
+) -> dict:
+    """Mix multiple audio tracks together (layer them).
+
+    All input files play simultaneously, mixed into a single output.
+    Perfect for layering voice + background music + ambient sounds.
+
+    Args:
+        audio_paths: List of audio file paths to mix together.
+        output_path: Path for the output mixed file.
+        volumes: Optional list of volume multipliers for each track (1.0 = original).
+            If not provided, all tracks are mixed at original volume.
+            Example: [1.0, 0.3, 0.5] - full voice, 30% music, 50% ambience.
+        normalize: If True, normalize the output to prevent clipping (default True).
+
+    Returns:
+        Dict with:
+        - output_path: Path to mixed output file
+        - input_count: Number of tracks mixed
+        - duration_ms: Duration of output
+        - normalized: Whether normalization was applied
+
+    Example:
+        # Layer voice over background music
+        result = mix_audio_tracks(
+            ["narration.wav", "music.wav"],
+            "scene.wav",
+            volumes=[1.0, 0.2]  # Full narration, 20% music
+        )
+
+        # Mix three layers: voice + music + ambience
+        result = mix_audio_tracks(
+            ["voice.wav", "music.wav", "rain.wav"],
+            "final.wav",
+            volumes=[1.0, 0.3, 0.4]
+        )
+    """
+    result = mix_audio(
+        audio_paths=audio_paths,
+        output_path=output_path,
+        volumes=volumes,
+        normalize=normalize,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def adjust_audio_volume(
+    input_path: str,
+    output_path: Optional[str] = None,
+    volume: float = 1.0,
+    volume_db: Optional[float] = None,
+) -> dict:
+    """Adjust the volume of an audio file.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_vol' suffix in the same directory.
+        volume: Volume multiplier (1.0 = original, 2.0 = double, 0.5 = half).
+            Ignored if volume_db is specified.
+        volume_db: Volume adjustment in dB (overrides volume if specified).
+            Positive = louder, negative = quieter.
+            +6dB = roughly 2x louder, -6dB = roughly half.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Adjusted file path
+        - duration_ms: Duration of output
+        - volume_change: Description of change applied
+
+    Example:
+        # Double the volume
+        result = adjust_audio_volume("quiet.wav", volume=2.0)
+
+        # Reduce by 6dB
+        result = adjust_audio_volume("loud.wav", volume_db=-6)
+    """
+    result = adjust_volume(
+        input_path=input_path,
+        output_path=output_path,
+        volume=volume,
+        volume_db=volume_db,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def apply_audio_fade(
+    input_path: str,
+    output_path: Optional[str] = None,
+    fade_in_ms: float = 0,
+    fade_out_ms: float = 0,
+) -> dict:
+    """Apply fade in and/or fade out to audio.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_faded' suffix in the same directory.
+        fade_in_ms: Duration of fade in at start in milliseconds (0 = no fade in).
+        fade_out_ms: Duration of fade out at end in milliseconds (0 = no fade out).
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Faded file path
+        - duration_ms: Duration of output
+        - fade_in_ms: Fade in duration applied
+        - fade_out_ms: Fade out duration applied
+
+    Example:
+        # Fade in at start
+        result = apply_audio_fade("audio.wav", fade_in_ms=500)
+
+        # Fade out at end
+        result = apply_audio_fade("audio.wav", fade_out_ms=1000)
+
+        # Both fade in and out
+        result = apply_audio_fade("audio.wav", fade_in_ms=200, fade_out_ms=500)
+    """
+    result = apply_fade(
+        input_path=input_path,
+        output_path=output_path,
+        fade_in_ms=fade_in_ms,
+        fade_out_ms=fade_out_ms,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def apply_audio_effects(
+    input_path: str,
+    output_path: Optional[str] = None,
+    lowpass_hz: Optional[float] = None,
+    highpass_hz: Optional[float] = None,
+    bass_gain_db: Optional[float] = None,
+    treble_gain_db: Optional[float] = None,
+    speed: Optional[float] = None,
+    reverb: bool = False,
+    echo_delay_ms: Optional[float] = None,
+    echo_decay: float = 0.5,
+) -> dict:
+    """Apply audio effects to a file.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_fx' suffix in the same directory.
+        lowpass_hz: Low-pass filter cutoff (removes high frequencies above this).
+            Example: 3000 for "telephone" effect, 8000 for "muffled" sound.
+        highpass_hz: High-pass filter cutoff (removes low frequencies below this).
+            Example: 300 to remove rumble, 80 for subtle bass cut.
+        bass_gain_db: Bass boost/cut in dB. Positive = more bass, negative = less.
+            Example: +6 for bass boost, -3 for subtle reduction.
+        treble_gain_db: Treble boost/cut in dB. Positive = brighter, negative = darker.
+            Example: +3 for clarity, -6 for warm sound.
+        speed: Playback speed multiplier (0.5 = half speed, 2.0 = double).
+            Note: This also affects pitch.
+        reverb: Add reverb effect (room-like ambience).
+        echo_delay_ms: Echo delay in milliseconds (None = no echo).
+            Example: 200 for subtle echo, 500 for dramatic effect.
+        echo_decay: Echo decay factor 0-1 (how quickly echo fades).
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Processed file path
+        - duration_ms: Duration of output
+        - effects_applied: List of effects that were applied
+
+    Example:
+        # Create a "phone call" effect
+        result = apply_audio_effects("voice.wav", lowpass_hz=3000, highpass_hz=300)
+
+        # Add dramatic reverb
+        result = apply_audio_effects("voice.wav", reverb=True)
+
+        # Boost bass and add echo
+        result = apply_audio_effects("voice.wav", bass_gain_db=6, echo_delay_ms=200)
+
+        # Speed up playback
+        result = apply_audio_effects("audio.wav", speed=1.5)
+    """
+    result = apply_effects(
+        input_path=input_path,
+        output_path=output_path,
+        lowpass_hz=lowpass_hz,
+        highpass_hz=highpass_hz,
+        bass_gain_db=bass_gain_db,
+        treble_gain_db=treble_gain_db,
+        speed=speed,
+        reverb=reverb,
+        echo_delay_ms=echo_delay_ms,
+        echo_decay=echo_decay,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def overlay_audio_track(
+    base_path: str,
+    overlay_path: str,
+    output_path: str,
+    position_ms: float = 0,
+    overlay_volume: float = 1.0,
+) -> dict:
+    """Overlay one audio track on top of another at a specific position.
+
+    Useful for adding sound effects, background music, or ambience at specific times.
+
+    Args:
+        base_path: Path to the base audio file.
+        overlay_path: Path to the audio file to overlay.
+        output_path: Path for the output file.
+        position_ms: Position in base audio where overlay starts (in milliseconds).
+            Default: 0 (overlay starts at beginning).
+        overlay_volume: Volume multiplier for the overlay (1.0 = original).
+            Use lower values (0.2-0.5) for background music under narration.
+
+    Returns:
+        Dict with:
+        - base_path: Base audio path
+        - overlay_path: Overlay audio path
+        - output_path: Output file path
+        - duration_ms: Duration of output
+        - overlay_position_ms: Where overlay was placed
+        - overlay_volume: Volume used for overlay
+
+    Example:
+        # Add a sound effect at 5 seconds
+        result = overlay_audio_track(
+            "narration.wav", "explosion.wav", "scene.wav",
+            position_ms=5000
+        )
+
+        # Add background music at lower volume
+        result = overlay_audio_track(
+            "narration.wav", "music.wav", "scene.wav",
+            overlay_volume=0.2
+        )
+
+        # Add ambience starting 2 seconds in
+        result = overlay_audio_track(
+            "dialog.wav", "rain.wav", "scene.wav",
+            position_ms=2000, overlay_volume=0.3
+        )
+    """
+    result = overlay_audio(
+        base_path=base_path,
+        overlay_path=overlay_path,
+        output_path=output_path,
+        position_ms=position_ms,
+        overlay_volume=overlay_volume,
+    )
+    return to_dict(result)
 
 
 # ============================================================================
