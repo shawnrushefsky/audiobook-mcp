@@ -56,6 +56,8 @@ from .tools.audio import (
     convert_audio,
     concatenate_audio,
     normalize_audio,
+    resample_audio,
+    validate_audio_compatibility,
     is_ffmpeg_available,
     trim_audio,
     batch_detect_silence,
@@ -100,6 +102,25 @@ from .tools.analysis import (
     detect_silence,
     validate_format,
     get_sfx_analysis_info,
+)
+
+# Import song generation module
+from .tools.songgen import (
+    check_songgen,
+    get_info as get_songgen_info,
+    get_available_engines as get_available_songgen_engines,
+    generate as generate_song,
+)
+from .tools.songgen.levo import (
+    check_models_downloaded as check_songgen_models,
+    download_models as download_songgen_models_impl,
+    MODELS as SONGGEN_MODELS,
+    STRUCTURE_MARKERS as SONGGEN_STRUCTURE_MARKERS,
+    STYLE_PROMPTS as SONGGEN_STYLE_PROMPTS,
+)
+from .tools.songgen.acestep import (
+    check_models_downloaded as check_acestep_models,
+    download_models as download_acestep_models_impl,
 )
 
 # Import assets module
@@ -781,6 +802,307 @@ def speak_seamlessm4t(
 
 
 # ============================================================================
+# Song Generation Tools
+# ============================================================================
+
+
+@mcp.tool()
+def check_songgen_availability() -> dict:
+    """Check if song generation engines are available and properly configured.
+
+    Returns detailed status including:
+    - Available engines
+    - Device info (CUDA required)
+    - Setup instructions for unavailable engines
+
+    Note: Song generation requires CUDA GPU with 10-28GB VRAM.
+    """
+    return check_songgen()
+
+
+@mcp.tool()
+def get_songgen_engines_info() -> dict:
+    """Get detailed information about all song generation engines.
+
+    Returns info for each engine including:
+    - Name and description
+    - Requirements and availability
+    - Supported languages and max duration
+    - Lyrics format guide
+    """
+    engines = {}
+    for engine_id in get_available_songgen_engines():
+        info = get_songgen_info(engine_id)
+        engines[engine_id] = to_dict(info)
+    return {"engines": engines}
+
+
+@mcp.tool()
+def list_available_songgen_engines() -> dict:
+    """List song generation engines that are currently available (installed).
+
+    Returns:
+        Dict with list of available engine IDs and their basic info.
+    """
+    return {
+        "engines": get_available_songgen_engines(),
+        "note": "Song generation requires CUDA GPU (10-28GB VRAM depending on model)",
+    }
+
+
+@mcp.tool()
+def get_songgen_model_status(model_name: str = "base-new") -> dict:
+    """Get the download status of song generation models.
+
+    Args:
+        model_name: Model variant to check ("base-new", "base-full", "large").
+
+    Returns:
+        Dict with download status for runtime and model weights.
+    """
+    return check_songgen_models(model_name)
+
+
+@mcp.tool()
+def download_songgen_models(model_name: str = "base-new", force: bool = False) -> dict:
+    """Download song generation model weights from HuggingFace.
+
+    Downloads both the runtime dependencies and model weights.
+    This may take a while depending on your internet connection (~10GB total).
+
+    Args:
+        model_name: Model variant to download:
+            - "base-new": 2m30s max, 10GB VRAM, Chinese/English (default)
+            - "base-full": 4m30s max, 12GB VRAM, Chinese/English
+            - "large": 4m30s max, 22GB VRAM, best quality
+        force: If True, re-download even if models exist in cache.
+
+    Returns:
+        Status dict with download results.
+    """
+    return download_songgen_models_impl(model_name, force=force)
+
+
+@mcp.tool()
+def get_songgen_lyrics_format() -> dict:
+    """Get the lyrics format guide for song generation.
+
+    Returns documentation on how to format lyrics with structure markers,
+    section separators, and examples of properly formatted lyrics.
+    """
+    return {
+        "overview": (
+            "Lyrics use structure markers to define song sections. "
+            "Separate sections with ';' and sentences within sections with '.'"
+        ),
+        "structure_markers": SONGGEN_STRUCTURE_MARKERS,
+        "separator": ";",
+        "sentence_separator": ".",
+        "examples": [
+            {
+                "name": "Pop song structure",
+                "lyrics": (
+                    "[intro-short] ; "
+                    "[verse] Hello world. I'm singing today ; "
+                    "[chorus] This is the chorus. Sing along with me ; "
+                    "[verse] Second verse now. Different words here ; "
+                    "[chorus] This is the chorus. Sing along with me ; "
+                    "[outro-short]"
+                ),
+                "description": "female, pop, happy, upbeat",
+            },
+            {
+                "name": "Ballad",
+                "lyrics": (
+                    "[verse] Memories fade away. Like leaves in autumn wind ; "
+                    "[chorus] But I still remember you. Your voice echoes in my mind ; "
+                    "[bridge] Time moves on. Hearts grow cold ; "
+                    "[chorus] But I still remember you ; "
+                    "[outro]"
+                ),
+                "description": "male, ballad, sad, piano, slow",
+            },
+        ],
+        "style_prompts": SONGGEN_STYLE_PROMPTS,
+        "model_options": {k: v["description"] for k, v in SONGGEN_MODELS.items()},
+    }
+
+
+@mcp.tool()
+def generate_song_levo(
+    lyrics: str,
+    output_path: str,
+    description: str = "female, pop, happy",
+    generate_type: str = "mixed",
+    prompt_audio_path: Optional[str] = None,
+    auto_prompt_style: Optional[str] = None,
+    model_name: str = "base-new",
+    low_mem: bool = False,
+) -> dict:
+    """Generate a song using LeVo (Tencent's SongGeneration).
+
+    Creates complete songs with vocals and accompaniment from structured lyrics.
+    Supports Chinese and English, up to 4.5 minutes depending on model.
+
+    IMPORTANT - Lyrics Format:
+    Use structure markers to define song sections. Separate sections with ';'
+    and sentences within lyrical sections with '.'.
+
+    Structure markers:
+    - [intro], [intro-short]: Instrumental introduction
+    - [verse]: Main verses
+    - [pre-chorus]: Build-up before chorus
+    - [chorus]: Main hook/chorus
+    - [bridge]: Contrasting section
+    - [outro], [outro-short]: Ending
+    - [interlude]: Instrumental break
+
+    Example lyrics:
+        "[intro-short] ; [verse] Hello world. I'm singing today ; "
+        "[chorus] This is the chorus. Sing along with me ; [outro-short]"
+
+    Args:
+        lyrics: Structured lyrics with section markers (see format above).
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "song.wav") which saves to the configured output directory.
+        description: Musical style description. Comma-separated attributes like:
+            "female, pop, happy, piano" or "male, rock, aggressive, guitar, fast".
+        generate_type: Output type:
+            - "mixed": Combined vocals and accompaniment (default)
+            - "separate": Creates 3 files: mixed, vocals-only, and BGM-only
+            - "vocal": Vocals only (a cappella)
+            - "bgm": Accompaniment only (instrumental/karaoke)
+        prompt_audio_path: Optional path to ~10s reference audio for style cloning.
+        auto_prompt_style: Auto-select reference style instead of audio file.
+            Options: "Pop", "Rock", "Jazz", "R&B", "Electronic", "Folk", "Classical", "Hip-Hop", "Auto"
+        model_name: Model variant to use:
+            - "base-new": 2m30s max, 10GB VRAM (default)
+            - "base-full": 4m30s max, 12GB VRAM
+            - "large": 4m30s max, 22GB VRAM, best quality
+        low_mem: Enable low-memory mode (slower but uses less VRAM).
+
+    Returns:
+        Dict with status, output_path, duration_ms, and for "separate" mode
+        also includes vocal_path and bgm_path.
+
+    Note: Requires CUDA GPU with 10-28GB VRAM depending on model.
+    First run will download ~10GB of model weights.
+    """
+    result = generate_song(
+        engine_id="levo",
+        lyrics=lyrics,
+        output_path=resolve_output_path(output_path),
+        description=description,
+        generate_type=generate_type,
+        prompt_audio_path=prompt_audio_path,
+        auto_prompt_style=auto_prompt_style,
+        model_name=model_name,
+        low_mem=low_mem,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def get_acestep_model_status() -> dict:
+    """Get the download status of ACE-Step models.
+
+    Returns:
+        Dict with download status and checkpoint directory location.
+    """
+    return check_acestep_models()
+
+
+@mcp.tool()
+def download_acestep_models(force: bool = False) -> dict:
+    """Download ACE-Step model weights from HuggingFace.
+
+    Downloads the ACE-Step 3.5B model (~7GB).
+    Note: Models also auto-download on first generation.
+
+    Args:
+        force: If True, re-download even if models exist in cache.
+
+    Returns:
+        Status dict with download results.
+    """
+    return download_acestep_models_impl(force=force)
+
+
+@mcp.tool()
+def generate_song_acestep(
+    prompt: str,
+    output_path: str,
+    lyrics: Optional[str] = None,
+    audio_duration: float = 60.0,
+    infer_steps: int = 27,
+    guidance_scale: float = 15.0,
+    scheduler_type: str = "euler",
+    seed: Optional[int] = None,
+    cpu_offload: bool = False,
+    quantized: bool = False,
+) -> dict:
+    """Generate a song using ACE-Step (supports Apple Silicon MPS + CUDA).
+
+    Creates complete songs with vocals from style prompts and optional lyrics.
+    ACE-Step is a 3.5B parameter foundation model that works on both Apple Silicon
+    (MPS with 36GB+ unified memory) and NVIDIA GPUs.
+
+    Args:
+        prompt: Style description as comma-separated tags.
+            Examples: "female vocals, pop, upbeat, synth, drums"
+                     "male vocals, rock, energetic, electric guitar"
+                     "instrumental, jazz, piano, smooth, relaxing"
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "song.wav") which saves to the configured output directory.
+        lyrics: Optional song lyrics with structure markers.
+            Structure markers: [verse], [chorus], [bridge], [intro], [outro], etc.
+            Example:
+                "[verse]\\nWalking down the street today\\nFeeling good in every way\\n\\n"
+                "[chorus]\\nThis is my moment\\nNothing can stop me now"
+        audio_duration: Duration in seconds (max 240, default 60).
+        infer_steps: Number of inference steps.
+            - 27: Fast generation (default, good quality)
+            - 60: Higher quality, slower
+        guidance_scale: Classifier-free guidance strength (default 15.0).
+            Higher values = stronger adherence to prompt.
+        scheduler_type: Diffusion scheduler type.
+            - "euler": Default, fast and stable
+            - "heun": Higher quality, slower
+            - "pingpong": Alternative scheduler
+        seed: Random seed for reproducibility. None for random.
+        cpu_offload: Offload model weights to CPU between steps.
+            Enables running on systems with less VRAM/RAM.
+        quantized: Use quantized model (lower quality, less memory).
+            Enables running on 8GB systems.
+
+    Returns:
+        Dict with status, output_path, duration_ms, and generation metadata.
+
+    Performance (Real-Time Factor):
+    - RTX 4090: ~34x realtime (27 steps)
+    - A100: ~27x realtime (27 steps)
+    - M2 Max: ~2.3x realtime (27 steps)
+
+    Note: First run downloads ~7GB of model weights from HuggingFace.
+    Apple Silicon requires 36GB+ unified memory (M1/M2/M3 Max/Ultra).
+    """
+    result = generate_song(
+        engine_id="acestep",
+        lyrics=prompt,  # ACE-Step uses "prompt" for style, we map it here
+        output_path=resolve_output_path(output_path),
+        description=lyrics,  # Actual lyrics go here
+        audio_duration=audio_duration,
+        infer_steps=infer_steps,
+        guidance_scale=guidance_scale,
+        scheduler_type=scheduler_type,
+        seed=seed,
+        cpu_offload=cpu_offload,
+        quantized=quantized,
+    )
+    return to_dict(result)
+
+
+# ============================================================================
 # Audio Utility Tools
 # ============================================================================
 
@@ -828,26 +1150,46 @@ def convert_audio_format(
 def join_audio_files(
     audio_paths: list[str],
     output_path: str,
-    output_format: str = "mp3",
-    gap_ms: float = 0,
+    output_format: str = "wav",
+    gap_ms: float | list[float] = 0,
+    resample: bool = False,
+    target_sample_rate: Optional[int] = None,
 ) -> dict:
     """Concatenate multiple audio files into one.
 
     Args:
         audio_paths: List of paths to audio files to concatenate (in order).
         output_path: Path for the output file.
-        output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'mp3'.
-        gap_ms: Milliseconds of silence to insert between segments. Default: 0.
-            Common values: 300ms between dialogue lines, 800ms for scene breaks.
+        output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'wav'.
+        gap_ms: Silence between segments. Can be:
+            - A single number: uniform gap between all segments (e.g., 300)
+            - A list of numbers: variable gaps (e.g., [300, 300, 800, 300])
+              List length must be len(audio_paths) - 1
+            Default: 0 (no gaps).
+            Typical values: 300-400ms between dialogue, 800ms+ for scene breaks.
+        resample: If True, resample all files to a common sample rate before joining.
+            This prevents static/noise artifacts from sample rate mismatches.
+        target_sample_rate: Target sample rate when resample=True. If None, uses
+            the sample rate of the first file.
 
     Returns:
         Dict with output_path, input_count, total_duration_ms, and output_format.
+
+    Raises:
+        ValueError: If sample rate mismatch detected without resample=True.
+
+    Note:
+        If you encounter static/noise artifacts when joining TTS output with
+        voice-effected audio, use resample=True or call validate_audio_compatibility()
+        first to check for sample rate mismatches.
     """
     result = concatenate_audio(
         audio_paths=audio_paths,
         output_path=output_path,
         output_format=output_format,
         gap_ms=gap_ms,
+        resample=resample,
+        target_sample_rate=target_sample_rate,
     )
     return to_dict(result)
 
@@ -868,6 +1210,73 @@ def normalize_audio_levels(
         Dict with input_path, output_path, and duration_ms.
     """
     result = normalize_audio(input_path=input_path, output_path=output_path)
+    return to_dict(result)
+
+
+@mcp.tool()
+def resample_audio_file(
+    input_path: str,
+    output_path: Optional[str] = None,
+    target_sample_rate: int = 44100,
+) -> dict:
+    """Resample audio to a target sample rate.
+
+    Use this to convert between sample rates without other processing.
+    Essential for ensuring compatibility when joining audio files from
+    different sources (e.g., TTS output at 24kHz with effects at 48kHz).
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_resampled' suffix.
+        target_sample_rate: Target sample rate in Hz. Common values:
+            - 24000: Common TTS output rate (Chatterbox, Maya1)
+            - 44100: CD quality, general audio
+            - 48000: Professional video/broadcast
+
+    Returns:
+        Dict with input_path, output_path, original_sample_rate, new_sample_rate,
+        and duration_ms.
+
+    Example:
+        # Resample voice effect output to match TTS output
+        resample_audio_file("effect_192k.wav", "effect_24k.wav", target_sample_rate=24000)
+    """
+    result = resample_audio(
+        input_path=input_path,
+        output_path=output_path,
+        target_sample_rate=target_sample_rate,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def check_audio_compatibility(audio_paths: list[str]) -> dict:
+    """Check if multiple audio files are compatible for joining.
+
+    Validates sample rates and channel counts to ensure files can be
+    concatenated without artifacts or corruption. Use this before
+    join_audio_files to detect potential issues.
+
+    Args:
+        audio_paths: List of audio file paths to check.
+
+    Returns:
+        Dict with:
+        - compatible: True if all files are compatible
+        - files_checked: Number of files checked
+        - issues: List of compatibility issues found
+        - sample_rates: Dict mapping each file to its sample rate
+        - channels: Dict mapping each file to its channel count
+        - recommendation: Suggested fix if incompatible
+
+    Example:
+        result = check_audio_compatibility(["a.wav", "b.wav", "c.wav"])
+        if not result["compatible"]:
+            print("Issues:", result["issues"])
+            print("Fix:", result["recommendation"])
+    """
+    result = validate_audio_compatibility(audio_paths=audio_paths)
     return to_dict(result)
 
 
@@ -1575,6 +1984,7 @@ def apply_voice_effect_preset(
     """Apply a voice effect preset to transform audio.
 
     Provides easy-to-use voice transformation presets for creative effects.
+    Preserves the original sample rate of the input file.
 
     Args:
         input_path: Path to the input audio file.
@@ -1586,13 +1996,19 @@ def apply_voice_effect_preset(
             - "vibrato": Pitch wobble/tremolo
             - "flanger": Sweeping phaser effect
             - "telephone": Lo-fi telephone quality
-            - "megaphone": PA/bullhorn sound
+            - "megaphone": PA/bullhorn sound (good for PA/intercom at 0.4-0.5)
             - "deep": Deeper voice with bass boost
             - "chipmunk": Higher pitched, cartoonish
             - "whisper": Soft whisper effect
-            - "cave": Cavernous echo/reverb
+            - "cave": Cavernous echo (use 0.1-0.15 for subtle room ambience)
         intensity: Effect strength from 0.0 to 1.0. Default: 0.5.
             Higher values = more pronounced effect.
+
+            Recommended intensities by effect:
+            - megaphone: 0.4-0.5 for PA/announcement systems
+            - cave: 0.1-0.15 for subtle room ambience, higher causes extreme echo
+            - telephone: 0.5-0.7 for realistic phone call
+            - chorus: 0.3-0.5 for ensemble effect without muddiness
 
     Returns:
         Dict with:
@@ -1606,11 +2022,11 @@ def apply_voice_effect_preset(
         # Apply robot voice
         result = apply_voice_effect_preset("voice.wav", effect="robot")
 
-        # Subtle chorus effect
-        result = apply_voice_effect_preset("voice.wav", effect="chorus", intensity=0.3)
+        # PA/intercom announcement
+        result = apply_voice_effect_preset("voice.wav", effect="megaphone", intensity=0.4)
 
-        # Strong telephone effect
-        result = apply_voice_effect_preset("voice.wav", effect="telephone", intensity=0.8)
+        # Subtle room ambience
+        result = apply_voice_effect_preset("voice.wav", effect="cave", intensity=0.15)
 
         # Make voice deeper
         result = apply_voice_effect_preset("voice.wav", effect="deep")

@@ -28,14 +28,31 @@ Complete list of MCP tools provided by Talky Talky.
 | `speak_cosyvoice` | Multilingual voice cloning with instruction control |
 | `speak_seamlessm4t` | Multilingual TTS with translation (35 languages, 200 speakers) |
 
+## Song Generation Tools
+
+| Tool | Description |
+|------|-------------|
+| `check_songgen_availability` | Check song generation engine status and device info |
+| `get_songgen_engines_info` | Get detailed info about all song generation engines |
+| `list_available_songgen_engines` | List installed song generation engines |
+| `get_songgen_model_status` | Check LeVo model download status |
+| `download_songgen_models` | Download LeVo models (~10GB) |
+| `get_songgen_lyrics_format` | Get lyrics format guide with examples |
+| `generate_song_levo` | Generate complete songs from lyrics (CUDA only) |
+| `get_acestep_model_status` | Check ACE-Step model download status |
+| `download_acestep_models` | Pre-download ACE-Step models (~7GB) |
+| `generate_song_acestep` | Generate songs with ACE-Step (MPS + CUDA) |
+
 ## Audio Utility Tools
 
 | Tool | Description |
 |------|-------------|
 | `get_audio_file_info` | Get audio file info (duration, format, size) |
 | `convert_audio_format` | Convert between formats (wav, mp3, m4a) |
-| `join_audio_files` | Concatenate multiple audio files (supports gap_ms) |
-| `normalize_audio_levels` | Normalize to broadcast standard |
+| `join_audio_files` | Concatenate audio files with format mismatch detection, variable gaps, and auto-resample |
+| `normalize_audio_levels` | Normalize to broadcast standard (preserves sample rate) |
+| `resample_audio_file` | Convert audio to a target sample rate (24kHz, 44.1kHz, 48kHz) |
+| `check_audio_compatibility` | Validate files are compatible before joining (sample rate, channels) |
 | `check_ffmpeg_available` | Check ffmpeg installation |
 | `play_audio` | Play audio file with system's default player |
 | `set_output_directory` | Set default directory for saving audio files |
@@ -57,13 +74,21 @@ Complete list of MCP tools provided by Talky Talky.
 
 ## Voice Modulation Tools
 
+All voice modulation tools preserve the original sample rate of the input file.
+
 | Tool | Description |
 |------|-------------|
 | `shift_audio_pitch` | Change pitch without affecting speed (±12 semitones) |
 | `stretch_audio_time` | Change speed without affecting pitch (0.5x-2.0x) |
-| `apply_voice_effect_preset` | Apply voice effects (robot, chorus, telephone, etc.) |
-| `list_voice_effects` | List available voice effect presets |
+| `apply_voice_effect_preset` | Apply voice effects (robot, megaphone, cave, etc.) - preserves sample rate |
+| `list_voice_effects` | List available voice effect presets with intensity recommendations |
 | `shift_voice_formant` | Change voice character (masculine/feminine) |
+
+**Effect Intensity Recommendations:**
+- `megaphone`: 0.4-0.5 for PA/announcement systems
+- `cave`: 0.1-0.15 for subtle room ambience (higher causes extreme echo)
+- `telephone`: 0.5-0.7 for realistic phone call
+- `chorus`: 0.3-0.5 for ensemble effect without muddiness
 
 ## Transcription Tools
 

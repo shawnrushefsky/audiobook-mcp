@@ -7,6 +7,7 @@ MCP server providing Text-to-Speech, Speech-to-Text, and audio processing for AI
 | Documentation | Contents |
 |--------------|----------|
 | [docs/engines/tts.md](docs/engines/tts.md) | TTS engine reference (Maya1, Chatterbox, XTTS, etc.) |
+| [docs/engines/songgen.md](docs/engines/songgen.md) | Song generation (LeVo/SongGeneration) |
 | [docs/engines/transcription.md](docs/engines/transcription.md) | Whisper, Faster-Whisper reference |
 | [docs/engines/analysis.md](docs/engines/analysis.md) | Emotion, voice similarity, quality analysis |
 | [docs/adding-engines.md](docs/adding-engines.md) | How to add new TTS engines |
@@ -18,6 +19,7 @@ MCP server providing Text-to-Speech, Speech-to-Text, and audio processing for AI
 
 **Engines:**
 - **TTS**: Maya1 (voice design), Chatterbox/Turbo (voice cloning), MiraTTS, XTTS-v2, Kokoro, Soprano, VibeVoice, CosyVoice3, SeamlessM4T
+- **Song Generation**: LeVo (complete songs from lyrics, CUDA-only)
 - **Transcription**: Whisper, Faster-Whisper (4x faster)
 - **Analysis**: Emotion2vec (emotion), Resemblyzer (voice similarity), NISQA (quality)
 - **Assets**: Local indexing, Freesound.org, Jamendo (music)
@@ -41,6 +43,7 @@ talky_talky/
 ├── tools/
 │   ├── audio.py          # Audio utilities
 │   ├── tts/              # TTS engines (base.py, utils.py, maya1.py, ...)
+│   ├── songgen/          # Song generation (base.py, levo.py)
 │   ├── transcription/    # STT engines (whisper.py, faster_whisper.py)
 │   ├── analysis/         # Analysis engines (emotion2vec.py, resemblyzer.py, nisqa.py)
 │   └── assets/           # Asset management (database.py, local.py, freesound.py)
@@ -54,6 +57,7 @@ All engine modules use a pluggable architecture with abstract base classes:
 
 ```python
 # TTS: base.py defines TTSEngine, TextPromptedEngine, AudioPromptedEngine, VoiceSelectionEngine
+# SongGen: base.py defines SongGenEngine
 # Transcription: base.py defines TranscriptionEngine
 # Analysis: base.py defines EmotionEngine, VoiceSimilarityEngine, SpeechQualityEngine
 

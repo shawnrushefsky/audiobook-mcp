@@ -1,6 +1,65 @@
 # Audio Features
 
-This document covers voice modulation tools and audio asset management.
+This document covers voice modulation tools, audio processing best practices, and audio asset management.
+
+## Sample Rate Handling
+
+When working with TTS output and audio effects, sample rate mismatches can cause static or corruption. All Talky Talky audio tools now preserve sample rates and detect mismatches.
+
+### Common Sample Rates
+
+| Sample Rate | Typical Source |
+|-------------|----------------|
+| 24000 Hz | Chatterbox, Maya1, most TTS engines |
+| 44100 Hz | CD quality, general audio |
+| 48000 Hz | Video production, MiraTTS |
+| 22050 Hz | Some legacy TTS, low-quality audio |
+
+### Avoiding Sample Rate Issues
+
+**When joining audio files:**
+```python
+from talky_talky.tools.audio import concatenate_audio, validate_audio_compatibility
+
+# Check compatibility first
+result = validate_audio_compatibility(["file1.wav", "file2.wav", "file3.wav"])
+if not result.compatible:
+    print("Issues:", result.issues)
+    print("Fix:", result.recommendation)
+
+# Option 1: Auto-resample when joining
+result = concatenate_audio(
+    audio_paths=["file1.wav", "file2.wav"],
+    output_path="output.wav",
+    resample=True,  # Auto-converts to first file's rate
+)
+
+# Option 2: Specify target sample rate
+result = concatenate_audio(
+    audio_paths=["file1.wav", "file2.wav"],
+    output_path="output.wav",
+    resample=True,
+    target_sample_rate=24000,  # Match TTS output
+)
+```
+
+**Resampling individual files:**
+```python
+from talky_talky.tools.audio import resample_audio
+
+# Resample voice effect output to match TTS
+result = resample_audio("effect_192k.wav", "effect_24k.wav", target_sample_rate=24000)
+```
+
+### Recommended Workflow for Production Audio
+
+1. **Generate TTS segments** (outputs at engine's native rate, e.g., 24kHz)
+2. **Apply voice effects** (now preserves sample rate)
+3. **Check compatibility before joining**
+4. **Join segments** with `resample=True` if needed, using WAV format
+5. **Normalize final output** (preserves sample rate)
+
+---
 
 ## Voice Modulation
 
@@ -45,28 +104,35 @@ result = stretch_time("voice.wav", "fast.wav", rate=1.25)
 
 ### Voice Effects
 
-Apply preset voice effects for creative transformation.
+Apply preset voice effects for creative transformation. All voice effects preserve the original sample rate of the input file.
 
 ```python
 from talky_talky.tools.audio import apply_voice_effect
 
 result = apply_voice_effect("voice.wav", "robot.wav", effect="robot")
-result = apply_voice_effect("voice.wav", "chorus.wav", effect="chorus", intensity=0.7)
+
+# PA/intercom announcement
+result = apply_voice_effect("voice.wav", "pa.wav", effect="megaphone", intensity=0.4)
+
+# Subtle room ambience
+result = apply_voice_effect("voice.wav", "room.wav", effect="cave", intensity=0.15)
 ```
 
 **Available Effects:**
-| Effect | Description |
-|--------|-------------|
-| `robot` | Robotic/synthetic voice using ring modulation |
-| `chorus` | Choir/ensemble effect with multiple voices |
-| `vibrato` | Pitch wobble effect |
-| `flanger` | Sweeping phaser effect |
-| `telephone` | Lo-fi telephone quality |
-| `megaphone` | PA/bullhorn sound |
-| `deep` | Deeper voice with bass boost |
-| `chipmunk` | Higher pitched, faster voice |
-| `whisper` | Soft whisper effect |
-| `cave` | Cavernous echo effect |
+| Effect | Description | Recommended Intensity |
+|--------|-------------|----------------------|
+| `robot` | Robotic/synthetic voice using ring modulation | 0.4-0.6 |
+| `chorus` | Choir/ensemble effect with multiple voices | 0.3-0.5 |
+| `vibrato` | Pitch wobble effect | 0.3-0.5 |
+| `flanger` | Sweeping phaser effect | 0.3-0.5 |
+| `telephone` | Lo-fi telephone quality | 0.5-0.7 |
+| `megaphone` | PA/bullhorn sound | **0.4-0.5** for PA systems |
+| `deep` | Deeper voice with bass boost | 0.4-0.6 |
+| `chipmunk` | Higher pitched, faster voice | 0.3-0.5 |
+| `whisper` | Soft whisper effect | 0.4-0.6 |
+| `cave` | Cavernous echo effect | **0.1-0.15** for subtle room ambience |
+
+> **Warning:** The `cave` effect at default intensity (0.5) produces extreme echo unsuitable for PA/intercom voices. Use 0.1-0.15 for subtle room ambience. For PA/announcement systems, use `megaphone` at 0.4-0.5 instead.
 
 **Requirements:** ffmpeg (no additional Python dependencies)
 

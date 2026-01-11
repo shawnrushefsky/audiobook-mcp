@@ -5174,6 +5174,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+acestep = [
+    { name = "huggingface-hub" },
+    { name = "torchaudio" },
+]
 analysis = [
     { name = "funasr" },
     { name = "librosa" },
@@ -5305,6 +5309,33 @@ linux-cuda-analysis = [
     { name = "transformers" },
     { name = "tts" },
 ]
+linux-cuda-complete = [
+    { name = "chatterbox-tts" },
+    { name = "einops" },
+    { name = "fastaudiosr" },
+    { name = "faster-whisper" },
+    { name = "funasr" },
+    { name = "huggingface-hub" },
+    { name = "kokoro" },
+    { name = "librosa" },
+    { name = "modelscope" },
+    { name = "ncodec" },
+    { name = "numpy" },
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "resemblyzer" },
+    { name = "sentencepiece" },
+    { name = "snac" },
+    { name = "soprano-tts" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "torchaudio" },
+    { name = "torchmetrics" },
+    { name = "transformers" },
+    { name = "tts" },
+]
 linux-cuda-full = [
     { name = "chatterbox-tts" },
     { name = "einops" },
@@ -5325,6 +5356,27 @@ linux-cuda-full = [
     { name = "soprano-tts" },
     { name = "torch" },
     { name = "torchmetrics" },
+    { name = "transformers" },
+    { name = "tts" },
+]
+linux-cuda-songgen = [
+    { name = "chatterbox-tts" },
+    { name = "einops" },
+    { name = "fastaudiosr" },
+    { name = "huggingface-hub" },
+    { name = "kokoro" },
+    { name = "librosa" },
+    { name = "ncodec" },
+    { name = "numpy" },
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "pyyaml" },
+    { name = "sentencepiece" },
+    { name = "snac" },
+    { name = "soprano-tts" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "torchaudio" },
     { name = "transformers" },
     { name = "tts" },
 ]
@@ -5374,6 +5426,24 @@ macos-analysis = [
     { name = "transformers" },
     { name = "tts" },
 ]
+macos-complete = [
+    { name = "chatterbox-tts" },
+    { name = "faster-whisper" },
+    { name = "funasr" },
+    { name = "kokoro" },
+    { name = "librosa" },
+    { name = "modelscope" },
+    { name = "numpy" },
+    { name = "onnx" },
+    { name = "requests" },
+    { name = "resemblyzer" },
+    { name = "sentencepiece" },
+    { name = "snac" },
+    { name = "torch" },
+    { name = "torchmetrics" },
+    { name = "transformers" },
+    { name = "tts" },
+]
 macos-full = [
     { name = "chatterbox-tts" },
     { name = "faster-whisper" },
@@ -5389,6 +5459,16 @@ macos-full = [
     { name = "snac" },
     { name = "torch" },
     { name = "torchmetrics" },
+    { name = "transformers" },
+    { name = "tts" },
+]
+macos-songgen = [
+    { name = "huggingface-hub" },
+    { name = "kokoro" },
+    { name = "sentencepiece" },
+    { name = "snac" },
+    { name = "torch" },
+    { name = "torchaudio" },
     { name = "transformers" },
     { name = "tts" },
 ]
@@ -5430,6 +5510,26 @@ resemblyzer = [
 seamlessm4t = [
     { name = "sentencepiece" },
     { name = "torch" },
+    { name = "transformers" },
+]
+songgen = [
+    { name = "einops" },
+    { name = "huggingface-hub" },
+    { name = "librosa" },
+    { name = "pyyaml" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "torchaudio" },
+    { name = "transformers" },
+]
+songgen-levo = [
+    { name = "einops" },
+    { name = "huggingface-hub" },
+    { name = "librosa" },
+    { name = "pyyaml" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "torchaudio" },
     { name = "transformers" },
 ]
 soprano = [
@@ -5479,13 +5579,17 @@ xtts = [
 requires-dist = [
     { name = "chatterbox-tts", marker = "extra == 'chatterbox'", specifier = ">=0.1.0" },
     { name = "einops", marker = "extra == 'mira'", specifier = ">=0.6.0" },
+    { name = "einops", marker = "extra == 'songgen-levo'", specifier = ">=0.8.0" },
     { name = "fastaudiosr", marker = "extra == 'mira'", git = "https://github.com/ysharma3501/FlashSR.git" },
     { name = "faster-whisper", marker = "extra == 'faster-whisper'", specifier = ">=1.0.0" },
     { name = "funasr", marker = "extra == 'emotion2vec'", specifier = ">=1.0.0" },
+    { name = "huggingface-hub", marker = "extra == 'acestep'", specifier = ">=0.20.0" },
     { name = "huggingface-hub", marker = "extra == 'cosyvoice'", specifier = ">=0.20.0" },
+    { name = "huggingface-hub", marker = "extra == 'songgen-levo'", specifier = ">=0.25.0" },
     { name = "kokoro", marker = "extra == 'kokoro'", specifier = ">=0.9.2" },
     { name = "librosa", marker = "extra == 'mira'", specifier = ">=0.10.0" },
     { name = "librosa", marker = "extra == 'nisqa'", specifier = ">=0.10.0" },
+    { name = "librosa", marker = "extra == 'songgen-levo'", specifier = ">=0.10.0" },
     { name = "librosa", marker = "extra == 'voice-modulation'", specifier = ">=0.10.0" },
     { name = "librosa", marker = "extra == 'voice-modulation-lite'", specifier = ">=0.10.0" },
     { name = "mcp", specifier = ">=1.0.0" },
@@ -5499,6 +5603,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pyworld", marker = "extra == 'voice-modulation'", specifier = ">=0.3.0" },
+    { name = "pyyaml", marker = "extra == 'songgen-levo'", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.28.0" },
     { name = "requests", marker = "extra == 'nisqa'", specifier = ">=2.28.0" },
     { name = "resemblyzer", marker = "extra == 'resemblyzer'", specifier = ">=0.1.3" },
@@ -5507,37 +5612,47 @@ requires-dist = [
     { name = "snac", marker = "extra == 'maya1'" },
     { name = "soprano-tts", marker = "extra == 'soprano'" },
     { name = "soundfile", specifier = ">=0.12.0" },
+    { name = "soundfile", marker = "extra == 'songgen-levo'", specifier = ">=0.12.0" },
     { name = "soundfile", marker = "extra == 'vibevoice'", specifier = ">=0.12.0" },
     { name = "talky-talky", extras = ["cpu", "analysis"], marker = "extra == 'cpu-analysis'" },
     { name = "talky-talky", extras = ["cpu", "transcription"], marker = "extra == 'cpu-transcription'" },
     { name = "talky-talky", extras = ["cpu", "transcription", "analysis"], marker = "extra == 'cpu-full'" },
     { name = "talky-talky", extras = ["emotion2vec", "resemblyzer", "nisqa"], marker = "extra == 'analysis'" },
     { name = "talky-talky", extras = ["linux-cuda", "analysis"], marker = "extra == 'linux-cuda-analysis'" },
+    { name = "talky-talky", extras = ["linux-cuda", "songgen"], marker = "extra == 'linux-cuda-songgen'" },
     { name = "talky-talky", extras = ["linux-cuda", "transcription"], marker = "extra == 'linux-cuda-transcription'" },
     { name = "talky-talky", extras = ["linux-cuda", "transcription", "analysis"], marker = "extra == 'linux-cuda-full'" },
+    { name = "talky-talky", extras = ["linux-cuda-full", "songgen"], marker = "extra == 'linux-cuda-complete'" },
     { name = "talky-talky", extras = ["macos", "analysis"], marker = "extra == 'macos-analysis'" },
     { name = "talky-talky", extras = ["macos", "transcription"], marker = "extra == 'macos-transcription'" },
     { name = "talky-talky", extras = ["macos", "transcription", "analysis"], marker = "extra == 'macos-full'" },
+    { name = "talky-talky", extras = ["macos-full"], marker = "extra == 'macos-complete'" },
     { name = "talky-talky", extras = ["maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "seamlessm4t"], marker = "extra == 'linux-cuda'" },
     { name = "talky-talky", extras = ["maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "seamlessm4t"], marker = "extra == 'tts'" },
     { name = "talky-talky", extras = ["maya1", "chatterbox", "xtts", "kokoro", "seamlessm4t"], marker = "extra == 'cpu'" },
     { name = "talky-talky", extras = ["maya1", "chatterbox", "xtts", "kokoro", "seamlessm4t"], marker = "extra == 'macos'" },
+    { name = "talky-talky", extras = ["maya1", "xtts", "kokoro", "seamlessm4t", "acestep"], marker = "extra == 'macos-songgen'" },
+    { name = "talky-talky", extras = ["songgen-levo"], marker = "extra == 'songgen'" },
     { name = "talky-talky", extras = ["whisper", "faster-whisper"], marker = "extra == 'transcription'" },
     { name = "torch", marker = "extra == 'emotion2vec'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'maya1'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'mira'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'nisqa'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'seamlessm4t'", specifier = ">=2.0.0" },
+    { name = "torch", marker = "extra == 'songgen-levo'", specifier = ">=2.6.0" },
     { name = "torch", marker = "extra == 'whisper'", specifier = ">=2.0.0" },
+    { name = "torchaudio", marker = "extra == 'acestep'", specifier = ">=2.0.0" },
     { name = "torchaudio", marker = "extra == 'cosyvoice'", specifier = ">=2.0.0" },
+    { name = "torchaudio", marker = "extra == 'songgen-levo'", specifier = ">=2.6.0" },
     { name = "torchmetrics", marker = "extra == 'nisqa'", specifier = ">=1.0.0" },
     { name = "transformers", marker = "extra == 'maya1'", specifier = ">=4.35.0" },
     { name = "transformers", marker = "extra == 'mira'", specifier = ">=4.35.0" },
     { name = "transformers", marker = "extra == 'seamlessm4t'", specifier = ">=4.35.0" },
+    { name = "transformers", marker = "extra == 'songgen-levo'", specifier = ">=4.37.0" },
     { name = "transformers", marker = "extra == 'whisper'", specifier = ">=4.35.0" },
     { name = "tts", marker = "extra == 'xtts'", specifier = ">=0.22.0" },
 ]
-provides-extras = ["whisper", "faster-whisper", "transcription", "maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "vibevoice", "cosyvoice", "seamlessm4t", "tts", "macos", "macos-transcription", "macos-analysis", "macos-full", "linux-cuda", "linux-cuda-transcription", "linux-cuda-analysis", "linux-cuda-full", "cpu", "cpu-transcription", "cpu-analysis", "cpu-full", "emotion2vec", "resemblyzer", "nisqa", "analysis", "voice-modulation", "voice-modulation-lite", "dev"]
+provides-extras = ["whisper", "faster-whisper", "transcription", "maya1", "chatterbox", "mira", "xtts", "kokoro", "soprano", "vibevoice", "cosyvoice", "seamlessm4t", "songgen-levo", "acestep", "songgen", "tts", "macos", "macos-songgen", "macos-transcription", "macos-analysis", "macos-full", "macos-complete", "linux-cuda", "linux-cuda-songgen", "linux-cuda-transcription", "linux-cuda-analysis", "linux-cuda-full", "linux-cuda-complete", "cpu", "cpu-transcription", "cpu-analysis", "cpu-full", "emotion2vec", "resemblyzer", "nisqa", "analysis", "voice-modulation", "voice-modulation-lite", "dev"]
 
 [[package]]
 name = "tensorboard"

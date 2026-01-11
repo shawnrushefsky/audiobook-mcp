@@ -92,6 +92,39 @@ seamlessm4t = [
     "transformers>=4.35.0",
     "sentencepiece>=0.1.99",
 ]
+# SongGeneration/LeVo support (AI song generation from lyrics)
+# Tencent's text-to-song model - generates vocals + accompaniment
+# CUDA GPU required (10-28GB VRAM depending on model)
+# Note: Full setup requires cloning the LeVo repo for third_party dependencies
+# See: https://github.com/tencent-ailab/songgeneration
+songgen-levo = [
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+    "transformers>=4.37.0",
+    "huggingface_hub>=0.25.0",
+    "pyyaml>=6.0",
+    "einops>=0.8.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+]
+# ACE-Step support (AI song generation foundation model)
+# Supports Apple Silicon (MPS) and CUDA
+# MPS requires 36GB+ unified memory, CUDA requires 12GB+ VRAM
+# IMPORTANT: ACE-Step conflicts with chatterbox due to diffusers version mismatch
+# (ACE-Step needs diffusers>=0.33.0, chatterbox needs diffusers==0.29.0)
+# Must be installed in a SEPARATE environment without chatterbox.
+# See: https://github.com/ace-step/ACE-Step
+# Install: pip install git+https://github.com/ace-step/ACE-Step.git
+acestep = [
+    # Base dependencies only - ACE-Step requires separate install due to conflicts
+    "huggingface_hub>=0.20.0",
+    "torchaudio>=2.0.0",
+]
+# Song generation extras (choose one based on your needs)
+# NOTE: songgen-levo and acestep have dependency conflicts, install separately
+songgen = [
+    "talky-talky[songgen-levo]",
+]
 # All TTS engines (core engines without dependency conflicts)
 tts = [
     "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano,seamlessm4t]",
@@ -105,6 +138,12 @@ tts = [
 macos = [
     "talky-talky[maya1,chatterbox,xtts,kokoro,seamlessm4t]",
 ]
+# macOS with song generation base dependencies
+# NOTE: To use ACE-Step, install separately: pip install git+https://github.com/ace-step/ACE-Step.git
+# ACE-Step conflicts with chatterbox (diffusers versions), use macos-songgen instead of macos when needed
+macos-songgen = [
+    "talky-talky[maya1,xtts,kokoro,seamlessm4t,acestep]",
+]
 # macOS with transcription support
 macos-transcription = [
     "talky-talky[macos,transcription]",
@@ -117,10 +156,20 @@ macos-analysis = [
 macos-full = [
     "talky-talky[macos,transcription,analysis]",
 ]
+# macOS complete - same as macos-full
+# Note: For ACE-Step song generation, use macos-songgen (excludes chatterbox)
+# then install ACE-Step: pip install git+https://github.com/ace-step/ACE-Step.git
+macos-complete = [
+    "talky-talky[macos-full]",
+]
 
 # Linux/Windows with NVIDIA CUDA GPU - includes all engines
 linux-cuda = [
     "talky-talky[maya1,chatterbox,mira,xtts,kokoro,soprano,seamlessm4t]",
+]
+# Linux CUDA with song generation (CUDA required)
+linux-cuda-songgen = [
+    "talky-talky[linux-cuda,songgen]",
 ]
 # Linux CUDA with transcription support
 linux-cuda-transcription = [
@@ -133,6 +182,10 @@ linux-cuda-analysis = [
 # Linux CUDA full - all TTS engines, transcription, and analysis
 linux-cuda-full = [
     "talky-talky[linux-cuda,transcription,analysis]",
+]
+# Linux CUDA complete - everything including song generation
+linux-cuda-complete = [
+    "talky-talky[linux-cuda-full,songgen]",
 ]
 
 # CPU-only (no GPU) - same as macOS, excludes CUDA-only engines
