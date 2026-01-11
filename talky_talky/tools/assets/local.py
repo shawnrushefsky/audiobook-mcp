@@ -1,8 +1,6 @@
 """Local file system asset source."""
 
-import asyncio
 import hashlib
-import os
 import sys
 from datetime import datetime
 from pathlib import Path

@@ -13,8 +13,6 @@ as the API token. The "Client id" is used for OAuth2 flows which are not
 needed for basic API access.
 """
 
-import asyncio
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -95,10 +93,9 @@ def _parse_sound(data: dict) -> Asset:
     # Extract tags
     tags = data.get("tags", [])
 
-    # Determine asset type from tags/description
+    # Determine asset type from tags
     asset_type = AssetType.SFX  # Default
     tag_lower = [t.lower() for t in tags]
-    desc_lower = (data.get("description") or "").lower()
 
     if any(t in tag_lower for t in ["music", "song", "melody", "loop", "beat"]):
         asset_type = AssetType.MUSIC
