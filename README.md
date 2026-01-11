@@ -57,6 +57,7 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engine
   - [Transcription Tools](#transcription-tools)
   - [Audio Analysis Tools](#audio-analysis-tools)
   - [Audio Design Tools](#audio-design-tools)
+  - [Voice Modulation Tools](#voice-modulation-tools)
   - [Audio Utility Tools](#audio-utility-tools)
   - [Audio Asset Management Tools](#audio-asset-management-tools)
 - [TTS Engine Guide](#tts-engine-guide)
@@ -114,6 +115,15 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engine
 - **Crossfades**: Smooth transitions between segments
 - **Trimming**: Auto-detect content boundaries, remove silence
 - **Silence Insertion**: Add controlled pauses between segments
+
+### Voice Modulation
+
+- **Pitch Shifting**: Change pitch without affecting speed (±12 semitones)
+- **Time Stretching**: Change speed without affecting pitch
+- **Voice Effects**: Robot, chorus, vibrato, flanger, telephone, and more
+- **Formant Shifting**: Change voice character (masculine/feminine)
+
+> **Note:** Maya1 can achieve pitch, pacing, and timbre variations directly through voice descriptions (e.g., "high pitch, fast pacing, gravelly timbre"). Use the voice modulation tools for post-processing or with engines that don't have built-in voice control.
 
 ### Audio Asset Management
 
@@ -328,6 +338,16 @@ Add to `.mcp.json` or `~/.claude/settings.json`:
 | `insert_audio_silence` | Add controlled pauses |
 | `batch_analyze_silence` | Batch silence detection |
 
+### Voice Modulation Tools
+
+| Tool | Description |
+|------|-------------|
+| `shift_audio_pitch` | Change pitch without affecting speed |
+| `stretch_audio_time` | Change speed without affecting pitch |
+| `apply_voice_effect_preset` | Apply voice effects (robot, chorus, etc.) |
+| `list_voice_effects` | List available voice effect presets |
+| `shift_voice_formant` | Change voice character (masculine/feminine) |
+
 ### Audio Utility Tools
 
 | Tool | Description |
@@ -501,6 +521,15 @@ Analyze the speech quality of generated.wav and check if it meets broadcast stan
 
 ```
 Use SeamlessM4T to translate "Hello, how are you?" from English to Japanese speech
+```
+
+### Voice Modulation
+
+```
+1. Generate speech with Maya1 saying "Hello there"
+2. Create a robot version using the robot voice effect
+3. Create a deeper version by shifting formants to 0.8
+4. Create a chipmunk version by pitching up 6 semitones
 ```
 
 

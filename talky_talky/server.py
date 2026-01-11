@@ -66,6 +66,12 @@ from .tools.audio import (
     apply_fade,
     apply_effects,
     overlay_audio,
+    # Voice modulation
+    shift_pitch,
+    stretch_time,
+    apply_voice_effect,
+    shift_formant,
+    VOICE_EFFECTS,
 )
 
 # Import transcription module
@@ -1446,6 +1452,247 @@ def overlay_audio_track(
         output_path=output_path,
         position_ms=position_ms,
         overlay_volume=overlay_volume,
+    )
+    return to_dict(result)
+
+
+# ============================================================================
+# Voice Modulation Tools
+# ============================================================================
+
+
+@mcp.tool()
+def shift_audio_pitch(
+    input_path: str,
+    output_path: Optional[str] = None,
+    semitones: float = 0,
+) -> dict:
+    """Shift the pitch of audio without changing its speed.
+
+    Uses high-quality pitch shifting to change pitch while preserving duration.
+    This is different from speed changes which affect both pitch and tempo.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_pitched' suffix in the same directory.
+        semitones: Pitch shift in semitones.
+            Positive values = higher pitch, negative = lower pitch.
+            12 semitones = 1 octave up, -12 = 1 octave down.
+            Typical range: -12 to +12.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Pitched file path
+        - duration_ms: Duration (unchanged from original)
+        - semitones: Pitch shift applied
+        - sample_rate: Output sample rate
+
+    Example:
+        # Raise pitch by a major third (4 semitones)
+        result = shift_audio_pitch("voice.wav", semitones=4)
+
+        # Lower pitch by a perfect fourth (5 semitones)
+        result = shift_audio_pitch("voice.wav", semitones=-5)
+
+        # Raise by one octave
+        result = shift_audio_pitch("voice.wav", semitones=12)
+
+    Note:
+        Requires librosa. Install with: pip install librosa
+        Or use the analysis extra: pip install talky-talky[analysis]
+    """
+    result = shift_pitch(
+        input_path=input_path,
+        output_path=output_path,
+        semitones=semitones,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def stretch_audio_time(
+    input_path: str,
+    output_path: Optional[str] = None,
+    rate: float = 1.0,
+) -> dict:
+    """Stretch or compress the duration of audio without changing pitch.
+
+    Uses phase vocoder for high-quality time stretching that preserves pitch.
+    This is different from speed changes which affect both pitch and tempo.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_stretched' suffix in the same directory.
+        rate: Time stretch factor.
+            > 1.0 = faster playback (shorter duration)
+            < 1.0 = slower playback (longer duration)
+            0.5 = half speed (double the duration)
+            2.0 = double speed (half the duration)
+            Typical range: 0.5 to 2.0.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Stretched file path
+        - original_duration_ms: Original duration
+        - new_duration_ms: New duration after stretching
+        - rate: Stretch rate applied
+        - sample_rate: Output sample rate
+
+    Example:
+        # Slow down to 75% speed (longer duration, same pitch)
+        result = stretch_audio_time("voice.wav", rate=0.75)
+
+        # Speed up to 125% (shorter duration, same pitch)
+        result = stretch_audio_time("voice.wav", rate=1.25)
+
+        # Double the speed
+        result = stretch_audio_time("voice.wav", rate=2.0)
+
+    Note:
+        Requires librosa. Install with: pip install librosa
+        Or use the analysis extra: pip install talky-talky[analysis]
+    """
+    result = stretch_time(
+        input_path=input_path,
+        output_path=output_path,
+        rate=rate,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def apply_voice_effect_preset(
+    input_path: str,
+    output_path: Optional[str] = None,
+    effect: str = "robot",
+    intensity: float = 0.5,
+) -> dict:
+    """Apply a voice effect preset to transform audio.
+
+    Provides easy-to-use voice transformation presets for creative effects.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with the effect name as suffix (e.g., '_robot').
+        effect: Voice effect preset to apply. Options:
+            - "robot": Robotic/synthetic voice
+            - "chorus": Choir/ensemble effect (multiple voices)
+            - "vibrato": Pitch wobble/tremolo
+            - "flanger": Sweeping phaser effect
+            - "telephone": Lo-fi telephone quality
+            - "megaphone": PA/bullhorn sound
+            - "deep": Deeper voice with bass boost
+            - "chipmunk": Higher pitched, cartoonish
+            - "whisper": Soft whisper effect
+            - "cave": Cavernous echo/reverb
+        intensity: Effect strength from 0.0 to 1.0. Default: 0.5.
+            Higher values = more pronounced effect.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Processed file path
+        - duration_ms: Duration of output
+        - effect: Effect preset applied
+        - intensity: Intensity level used
+
+    Example:
+        # Apply robot voice
+        result = apply_voice_effect_preset("voice.wav", effect="robot")
+
+        # Subtle chorus effect
+        result = apply_voice_effect_preset("voice.wav", effect="chorus", intensity=0.3)
+
+        # Strong telephone effect
+        result = apply_voice_effect_preset("voice.wav", effect="telephone", intensity=0.8)
+
+        # Make voice deeper
+        result = apply_voice_effect_preset("voice.wav", effect="deep")
+    """
+    result = apply_voice_effect(
+        input_path=input_path,
+        output_path=output_path,
+        effect=effect,
+        intensity=intensity,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def list_voice_effects() -> dict:
+    """List all available voice effect presets.
+
+    Returns a dictionary of available voice effects and their descriptions.
+    Use these effect names with apply_voice_effect_preset().
+
+    Returns:
+        Dict with:
+        - effects: Dict mapping effect name to description
+        - count: Number of available effects
+    """
+    return {
+        "effects": VOICE_EFFECTS,
+        "count": len(VOICE_EFFECTS),
+    }
+
+
+@mcp.tool()
+def shift_voice_formant(
+    input_path: str,
+    output_path: Optional[str] = None,
+    shift_ratio: float = 1.0,
+) -> dict:
+    """Shift the formants of a voice to change its character.
+
+    Formants are resonant frequencies that give voices their characteristic
+    quality. Shifting formants can make a voice sound more masculine or
+    feminine without changing the pitch.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_formant' suffix in the same directory.
+        shift_ratio: Formant shift ratio.
+            < 1.0 = more masculine (deeper resonance)
+              - 0.8 = noticeably more masculine
+              - 0.9 = slightly more masculine
+            > 1.0 = more feminine (higher resonance)
+              - 1.1 = slightly more feminine
+              - 1.2 = noticeably more feminine
+            1.0 = no change
+            Typical range: 0.7 to 1.4.
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Processed file path
+        - duration_ms: Duration of output
+        - shift_ratio: Ratio applied
+        - sample_rate: Output sample rate
+
+    Example:
+        # Make a male voice sound more feminine
+        result = shift_voice_formant("male_voice.wav", shift_ratio=1.2)
+
+        # Make a female voice sound more masculine
+        result = shift_voice_formant("female_voice.wav", shift_ratio=0.85)
+
+        # Subtle feminization
+        result = shift_voice_formant("voice.wav", shift_ratio=1.1)
+
+    Note:
+        For best quality, install pyworld: pip install pyworld
+        Falls back to librosa-based approximation if pyworld is not available.
+    """
+    result = shift_formant(
+        input_path=input_path,
+        output_path=output_path,
+        shift_ratio=shift_ratio,
     )
     return to_dict(result)
 

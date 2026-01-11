@@ -504,6 +504,13 @@ print(result)
 - `apply_audio_effects` - Apply effects (EQ, reverb, echo, speed)
 - `overlay_audio_track` - Overlay audio at specific position
 
+### Voice Modulation Tools
+- `shift_audio_pitch` - Change pitch without affecting speed (±12 semitones)
+- `stretch_audio_time` - Change speed without affecting pitch (0.5x-2.0x)
+- `apply_voice_effect_preset` - Apply voice effects (robot, chorus, telephone, etc.)
+- `list_voice_effects` - List available voice effect presets
+- `shift_voice_formant` - Change voice character (masculine/feminine)
+
 ### Transcription Tools
 - `check_transcription_availability` - Check transcription engine status and device info
 - `get_transcription_engines_info` - Get detailed info about all transcription engines
@@ -981,6 +988,120 @@ if result.status == "success":
     print(f"Overall MOS: {result.overall_quality:.2f}/5.0")
     for dim in result.dimensions:
         print(f"  {dim.name}: {dim.score:.2f}")
+```
+
+## Voice Modulation
+
+Voice modulation tools allow you to transform audio in various ways without affecting other properties.
+
+> **Maya1 Built-in Modulation:** Maya1 can achieve many voice variations directly through voice descriptions without post-processing:
+> - **Pitch**: "low pitch", "high pitch", "medium-low pitch"
+> - **Pacing**: "slow pacing", "fast", "measured", "energetic"
+> - **Timbre**: "gravelly", "smooth", "warm", "bright", "husky", "nasal", "resonant"
+> - **Character**: "authoritative", "gentle", "menacing", "cheerful"
+>
+> Example: `"Female narrator, 30s, high pitch, fast pacing, bright timbre"`
+>
+> Use the voice modulation tools below for post-processing existing audio, or with engines that don't have built-in voice control (Chatterbox, XTTS, Kokoro, etc.).
+
+### Pitch Shifting
+
+Change the pitch of audio without affecting its duration.
+
+```python
+from talky_talky.tools.audio import shift_pitch
+
+# Raise pitch by 4 semitones (major third)
+result = shift_pitch("voice.wav", "higher.wav", semitones=4)
+
+# Lower pitch by 5 semitones (perfect fourth)
+result = shift_pitch("voice.wav", "lower.wav", semitones=-5)
+
+# Raise by one octave
+result = shift_pitch("voice.wav", "octave_up.wav", semitones=12)
+```
+
+**Requirements:** `librosa>=0.10.0` (included in analysis extra)
+
+### Time Stretching
+
+Change the speed/duration of audio without affecting pitch.
+
+```python
+from talky_talky.tools.audio import stretch_time
+
+# Slow down to 75% speed (longer duration)
+result = stretch_time("voice.wav", "slow.wav", rate=0.75)
+
+# Speed up to 125% (shorter duration)
+result = stretch_time("voice.wav", "fast.wav", rate=1.25)
+```
+
+**Requirements:** `librosa>=0.10.0` (included in analysis extra)
+
+### Voice Effects
+
+Apply preset voice effects for creative transformation.
+
+```python
+from talky_talky.tools.audio import apply_voice_effect
+
+# Available effects:
+# robot, chorus, vibrato, flanger, telephone,
+# megaphone, deep, chipmunk, whisper, cave
+
+result = apply_voice_effect("voice.wav", "robot.wav", effect="robot")
+result = apply_voice_effect("voice.wav", "chorus.wav", effect="chorus", intensity=0.7)
+```
+
+**Effects:**
+- `robot` - Robotic/synthetic voice using ring modulation
+- `chorus` - Choir/ensemble effect with multiple voices
+- `vibrato` - Pitch wobble effect
+- `flanger` - Sweeping phaser effect
+- `telephone` - Lo-fi telephone quality
+- `megaphone` - PA/bullhorn sound
+- `deep` - Deeper voice with bass boost
+- `chipmunk` - Higher pitched, faster voice
+- `whisper` - Soft whisper effect
+- `cave` - Cavernous echo effect
+
+**Requirements:** ffmpeg (no additional Python dependencies)
+
+### Formant Shifting
+
+Change voice character (masculine/feminine) without changing pitch.
+
+```python
+from talky_talky.tools.audio import shift_formant
+
+# Make voice sound more feminine
+result = shift_formant("male.wav", "feminine.wav", shift_ratio=1.2)
+
+# Make voice sound more masculine
+result = shift_formant("female.wav", "masculine.wav", shift_ratio=0.85)
+```
+
+**Parameters:**
+- `shift_ratio < 1.0` = more masculine (deeper resonance)
+- `shift_ratio > 1.0` = more feminine (higher resonance)
+- Typical range: 0.7 to 1.4
+
+**Requirements:**
+- Best quality: `pyworld>=0.3.0` (WORLD vocoder)
+- Fallback: `librosa>=0.10.0` (approximation)
+
+### Installation
+
+```bash
+# Full voice modulation with pyworld
+pip install -e ".[voice-modulation]"
+
+# Voice modulation without pyworld (uses librosa fallback)
+pip install -e ".[voice-modulation-lite]"
+
+# Already included if using analysis extra
+pip install -e ".[analysis]"
 ```
 
 ## Audio Asset Management

@@ -172,6 +172,17 @@ nisqa = [
 analysis = [
     "talky-talky[emotion2vec,resemblyzer,nisqa]",
 ]
+# Voice modulation (pitch shifting, time stretching, formant shifting)
+# Note: librosa (already in nisqa) provides pitch/time tools
+# pyworld is optional for high-quality formant shifting
+voice-modulation = [
+    "librosa>=0.10.0",  # Pitch shifting, time stretching
+    "pyworld>=0.3.0",   # High-quality formant shifting (WORLD vocoder)
+]
+# Voice modulation without pyworld (uses librosa approximation for formants)
+voice-modulation-lite = [
+    "librosa>=0.10.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
