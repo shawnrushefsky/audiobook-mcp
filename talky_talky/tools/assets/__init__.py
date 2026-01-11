@@ -145,9 +145,7 @@ def set_asset_library_path(path: str) -> dict:
     Returns:
         Dict with configured path and status
     """
-    db_path = set_database_path(
-        path if path == "default" else str(Path(path) / "assets.db")
-    )
+    db_path = set_database_path(path if path == "default" else str(Path(path) / "assets.db"))
 
     return {
         "status": "success",

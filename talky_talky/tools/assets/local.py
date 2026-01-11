@@ -300,9 +300,7 @@ class LocalSource(LocalAssetSource):
                         "original_path": str(file_path),
                         "folder": str(folder),
                     },
-                    created_at=datetime.fromtimestamp(
-                        file_path.stat().st_ctime
-                    ).isoformat(),
+                    created_at=datetime.fromtimestamp(file_path.stat().st_ctime).isoformat(),
                     updated_at=datetime.now().isoformat(),
                 )
 

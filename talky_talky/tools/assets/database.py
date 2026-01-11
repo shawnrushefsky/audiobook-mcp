@@ -297,9 +297,7 @@ def _save_asset_tags(
         if row:
             tag_id = row["id"]
         else:
-            cursor = conn.execute(
-                "INSERT INTO tags (name, source) VALUES (?, ?)", (tag, source)
-            )
+            cursor = conn.execute("INSERT INTO tags (name, source) VALUES (?, ?)", (tag, source))
             tag_id = cursor.lastrowid
 
         # Link tag to asset
@@ -587,9 +585,7 @@ def save_api_key(source: str, api_key: str) -> None:
 def get_api_key(source: str) -> str | None:
     """Get an API key for a source."""
     with get_connection() as conn:
-        cursor = conn.execute(
-            "SELECT api_key FROM api_keys WHERE source = ?", (source,)
-        )
+        cursor = conn.execute("SELECT api_key FROM api_keys WHERE source = ?", (source,))
         row = cursor.fetchone()
         return row["api_key"] if row else None
 
@@ -615,9 +611,7 @@ def get_config(key: str, default: str | None = None) -> str | None:
 def set_config(key: str, value: str) -> None:
     """Set a configuration value."""
     with get_connection() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, value)
-        )
+        conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, value))
 
 
 # Initialize database on import

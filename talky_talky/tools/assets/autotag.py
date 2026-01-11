@@ -50,26 +50,183 @@ class AutoTagResult:
 
 # Common stop words to filter out from transcription
 STOP_WORDS = {
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
-    "be", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "must", "shall", "can", "need",
-    "dare", "ought", "used", "it", "its", "this", "that", "these", "those",
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you",
-    "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself",
-    "she", "her", "hers", "herself", "they", "them", "their", "theirs",
-    "themselves", "what", "which", "who", "whom", "when", "where", "why",
-    "how", "all", "each", "every", "both", "few", "more", "most", "other",
-    "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-    "too", "very", "just", "also", "now", "here", "there", "then", "once",
-    "if", "because", "until", "while", "about", "into", "through", "during",
-    "before", "after", "above", "below", "between", "under", "again",
-    "further", "any", "um", "uh", "like", "yeah", "okay", "ok", "well",
-    "right", "know", "think", "going", "got", "get", "go", "come", "came",
-    "said", "say", "says", "tell", "told", "ask", "asked", "let", "make",
-    "made", "take", "took", "see", "saw", "look", "looked", "want", "wanted",
-    "give", "gave", "put", "seem", "seemed", "try", "tried", "leave", "left",
-    "call", "called", "keep", "kept", "still", "even", "back", "way", "being",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "need",
+    "dare",
+    "ought",
+    "used",
+    "it",
+    "its",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "me",
+    "my",
+    "myself",
+    "we",
+    "our",
+    "ours",
+    "ourselves",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "he",
+    "him",
+    "his",
+    "himself",
+    "she",
+    "her",
+    "hers",
+    "herself",
+    "they",
+    "them",
+    "their",
+    "theirs",
+    "themselves",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "just",
+    "also",
+    "now",
+    "here",
+    "there",
+    "then",
+    "once",
+    "if",
+    "because",
+    "until",
+    "while",
+    "about",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "under",
+    "again",
+    "further",
+    "any",
+    "um",
+    "uh",
+    "like",
+    "yeah",
+    "okay",
+    "ok",
+    "well",
+    "right",
+    "know",
+    "think",
+    "going",
+    "got",
+    "get",
+    "go",
+    "come",
+    "came",
+    "said",
+    "say",
+    "says",
+    "tell",
+    "told",
+    "ask",
+    "asked",
+    "let",
+    "make",
+    "made",
+    "take",
+    "took",
+    "see",
+    "saw",
+    "look",
+    "looked",
+    "want",
+    "wanted",
+    "give",
+    "gave",
+    "put",
+    "seem",
+    "seemed",
+    "try",
+    "tried",
+    "leave",
+    "left",
+    "call",
+    "called",
+    "keep",
+    "kept",
+    "still",
+    "even",
+    "back",
+    "way",
+    "being",
 }
 
 # Quality level thresholds (MOS scale 1-5)
@@ -109,10 +266,7 @@ def extract_keywords_from_text(
     words = re.findall(r"\b[a-z]+\b", text)
 
     # Filter stop words and short words
-    words = [
-        w for w in words
-        if w not in STOP_WORDS and len(w) >= min_word_length
-    ]
+    words = [w for w in words if w not in STOP_WORDS and len(w) >= min_word_length]
 
     # Count word frequency
     word_counts: dict[str, int] = {}
@@ -128,6 +282,7 @@ def _check_transcription_available() -> bool:
     """Check if transcription engines are available."""
     try:
         from ..transcription import get_engine
+
         # Try faster_whisper first (preferred), then whisper
         for engine_id in ["faster_whisper", "whisper"]:
             try:
@@ -145,6 +300,7 @@ def _check_emotion_available() -> bool:
     """Check if emotion detection is available."""
     try:
         from ..analysis.emotion2vec import Emotion2vecEngine
+
         engine = Emotion2vecEngine()
         return engine.is_available()
     except ImportError:
@@ -157,6 +313,7 @@ def _check_quality_available() -> bool:
     """Check if quality assessment is available."""
     try:
         from ..analysis.nisqa import NISQAEngine
+
         engine = NISQAEngine()
         return engine.is_available()
     except ImportError:
@@ -194,6 +351,7 @@ def auto_tag_audio(
         AutoTagResult with generated tags and metadata.
     """
     import time
+
     start_time = time.time()
 
     audio_path = str(Path(audio_path).resolve())
@@ -262,7 +420,8 @@ def auto_tag_audio(
                     emotion_result.primary_score
                     and emotion_result.primary_score >= EMOTION_CONFIDENCE_THRESHOLD
                     and emotion_result.primary_emotion
-                    and emotion_result.primary_emotion.lower() not in ("neutral", "unknown", "other")
+                    and emotion_result.primary_emotion.lower()
+                    not in ("neutral", "unknown", "other")
                 ):
                     emotion_tag = emotion_result.primary_emotion.lower()
                     if emotion_tag not in tags:

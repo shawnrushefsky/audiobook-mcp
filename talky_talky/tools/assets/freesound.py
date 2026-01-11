@@ -168,6 +168,7 @@ class FreesoundSource(RemoteAssetSource):
         """Check if httpx is available and API key is configured."""
         try:
             import httpx  # noqa: F401
+
             return self.is_api_key_configured()
         except ImportError:
             return False
@@ -253,9 +254,9 @@ class FreesoundSource(RemoteAssetSource):
             "page": page,
             "page_size": min(page_size, 150),  # Freesound max is 150
             "fields": "id,name,tags,description,duration,license,license_url,"
-                      "previews,download,username,created,num_downloads,"
-                      "avg_rating,num_ratings,type,samplerate,channels,"
-                      "filesize,bitrate,bitdepth,pack,geotag",
+            "previews,download,username,created,num_downloads,"
+            "avg_rating,num_ratings,type,samplerate,channels,"
+            "filesize,bitrate,bitdepth,pack,geotag",
         }
 
         if filters:
@@ -304,9 +305,9 @@ class FreesoundSource(RemoteAssetSource):
         url = f"{API_BASE}/sounds/{asset_id}/"
         params = {
             "fields": "id,name,tags,description,duration,license,license_url,"
-                      "previews,download,username,created,num_downloads,"
-                      "avg_rating,num_ratings,type,samplerate,channels,"
-                      "filesize,bitrate,bitdepth,pack,geotag",
+            "previews,download,username,created,num_downloads,"
+            "avg_rating,num_ratings,type,samplerate,channels,"
+            "filesize,bitrate,bitdepth,pack,geotag",
         }
 
         try:
@@ -383,8 +384,8 @@ class FreesoundSource(RemoteAssetSource):
             "page": page,
             "page_size": min(page_size, 150),
             "fields": "id,name,tags,description,duration,license,license_url,"
-                      "previews,download,username,created,type,samplerate,"
-                      "channels,filesize",
+            "previews,download,username,created,type,samplerate,"
+            "channels,filesize",
         }
 
         url = f"{API_BASE}/sounds/{sound_id}/similar/?{urlencode(params)}"

@@ -80,7 +80,9 @@ def check_models_downloaded() -> dict:
     model_file = checkpoint_dir / "model.safetensors"
     checkpoint_dir / "config.json"
 
-    if model_file.exists() or (checkpoint_dir.exists() and any(checkpoint_dir.glob("*.safetensors"))):
+    if model_file.exists() or (
+        checkpoint_dir.exists() and any(checkpoint_dir.glob("*.safetensors"))
+    ):
         return {
             "downloaded": True,
             "checkpoint_dir": str(checkpoint_dir),
@@ -297,11 +299,13 @@ def _generate_song(
                     # Move/rename to desired output path if needed
                     if str(generated_path) != str(output_path):
                         import shutil
+
                         shutil.move(generated_path, str(output_path))
 
         # Calculate duration
         try:
             import soundfile as sf
+
             info = sf.info(str(output_path))
             duration_ms = int(info.duration * 1000)
         except Exception:
@@ -371,6 +375,7 @@ class ACEStepEngine(SongGenEngine):
             # Check for acestep package
             try:
                 from acestep.pipeline_ace_step import ACEStepPipeline  # noqa: F401
+
                 return True
             except ImportError:
                 return False

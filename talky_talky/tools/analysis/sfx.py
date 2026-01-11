@@ -346,12 +346,14 @@ def detect_clipping(
                 if run_length >= min_consecutive:
                     start_ms = (start / sr) * 1000
                     end_ms = (end / sr) * 1000
-                    clipped_regions.append({
-                        "start_ms": round(start_ms, 2),
-                        "end_ms": round(end_ms, 2),
-                        "duration_ms": round(end_ms - start_ms, 2),
-                        "samples": run_length,
-                    })
+                    clipped_regions.append(
+                        {
+                            "start_ms": round(start_ms, 2),
+                            "end_ms": round(end_ms, 2),
+                            "duration_ms": round(end_ms - start_ms, 2),
+                            "samples": run_length,
+                        }
+                    )
                     max_consecutive = max(max_consecutive, run_length)
 
         has_clipping = len(clipped_regions) > 0
@@ -451,9 +453,15 @@ def analyze_spectrum(audio_path: str) -> SpectralResult:
         high_mask = (freqs >= 4000) & (freqs <= min(20000, sr / 2))
 
         total_energy = np.sum(magnitude_sum)
-        low_energy = float(np.sum(magnitude_sum[low_mask]) / total_energy) if total_energy > 0 else 0
-        mid_energy = float(np.sum(magnitude_sum[mid_mask]) / total_energy) if total_energy > 0 else 0
-        high_energy = float(np.sum(magnitude_sum[high_mask]) / total_energy) if total_energy > 0 else 0
+        low_energy = (
+            float(np.sum(magnitude_sum[low_mask]) / total_energy) if total_energy > 0 else 0
+        )
+        mid_energy = (
+            float(np.sum(magnitude_sum[mid_mask]) / total_energy) if total_energy > 0 else 0
+        )
+        high_energy = (
+            float(np.sum(magnitude_sum[high_mask]) / total_energy) if total_energy > 0 else 0
+        )
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
@@ -539,9 +547,9 @@ def detect_silence(
         silent_frames = rms < threshold_linear
 
         # Convert frames to time
-        frame_times_ms = librosa.frames_to_time(
-            np.arange(len(rms)), sr=sr, hop_length=hop_length
-        ) * 1000
+        frame_times_ms = (
+            librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length) * 1000
+        )
 
         # Find silence regions
         silence_regions = []
@@ -554,14 +562,24 @@ def detect_silence(
 
         for start_idx, end_idx in zip(starts, ends):
             if end_idx - start_idx >= min_frames:
-                start_ms = frame_times_ms[start_idx] if start_idx < len(frame_times_ms) else total_duration_ms
-                end_ms = frame_times_ms[min(end_idx, len(frame_times_ms) - 1)] if end_idx <= len(frame_times_ms) else total_duration_ms
+                start_ms = (
+                    frame_times_ms[start_idx]
+                    if start_idx < len(frame_times_ms)
+                    else total_duration_ms
+                )
+                end_ms = (
+                    frame_times_ms[min(end_idx, len(frame_times_ms) - 1)]
+                    if end_idx <= len(frame_times_ms)
+                    else total_duration_ms
+                )
                 duration_ms = end_ms - start_ms
-                silence_regions.append({
-                    "start_ms": round(start_ms, 2),
-                    "end_ms": round(end_ms, 2),
-                    "duration_ms": round(duration_ms, 2),
-                })
+                silence_regions.append(
+                    {
+                        "start_ms": round(start_ms, 2),
+                        "end_ms": round(end_ms, 2),
+                        "duration_ms": round(duration_ms, 2),
+                    }
+                )
 
         # Calculate leading and trailing silence
         leading_silence_ms = 0.0
@@ -578,7 +596,9 @@ def detect_silence(
 
         # Calculate total silence
         total_silence_ms = sum(r["duration_ms"] for r in silence_regions)
-        silence_percentage = (total_silence_ms / total_duration_ms) * 100 if total_duration_ms > 0 else 0
+        silence_percentage = (
+            (total_silence_ms / total_duration_ms) * 100 if total_duration_ms > 0 else 0
+        )
 
         # Content boundaries
         content_start_ms = leading_silence_ms
@@ -648,9 +668,7 @@ def validate_format(
 
         audio_path = Path(audio_path)
         if not audio_path.exists():
-            return FormatValidationResult(
-                status="error", error=f"File not found: {audio_path}"
-            )
+            return FormatValidationResult(status="error", error=f"File not found: {audio_path}")
 
         # Get file info
         info = sf.info(str(audio_path))
@@ -677,9 +695,7 @@ def validate_format(
             issues.append(
                 f"Sample rate {info.samplerate} Hz does not match target {target_sample_rate} Hz"
             )
-            recommendations.append(
-                f"Resample audio to {target_sample_rate} Hz"
-            )
+            recommendations.append(f"Resample audio to {target_sample_rate} Hz")
 
         if target_channels and info.channels != target_channels:
             channel_names = {1: "mono", 2: "stereo"}
@@ -692,9 +708,7 @@ def validate_format(
                 recommendations.append(f"Convert to {target}-channel audio")
 
         if target_bit_depth and bit_depth and bit_depth != target_bit_depth:
-            issues.append(
-                f"Bit depth {bit_depth} does not match target {target_bit_depth}"
-            )
+            issues.append(f"Bit depth {bit_depth} does not match target {target_bit_depth}")
             recommendations.append(f"Convert to {target_bit_depth}-bit audio")
 
         if min_duration_ms and duration_ms < min_duration_ms:
@@ -704,20 +718,14 @@ def validate_format(
             recommendations.append("Extend audio or use a longer clip")
 
         if max_duration_ms and duration_ms > max_duration_ms:
-            issues.append(
-                f"Duration {duration_ms:.0f}ms exceeds maximum {max_duration_ms:.0f}ms"
-            )
+            issues.append(f"Duration {duration_ms:.0f}ms exceeds maximum {max_duration_ms:.0f}ms")
             recommendations.append("Trim audio to fit within duration limit")
 
         if max_file_size_bytes and file_size > max_file_size_bytes:
             size_mb = file_size / (1024 * 1024)
             max_mb = max_file_size_bytes / (1024 * 1024)
-            issues.append(
-                f"File size {size_mb:.2f}MB exceeds maximum {max_mb:.2f}MB"
-            )
-            recommendations.append(
-                "Compress audio, reduce sample rate, or trim duration"
-            )
+            issues.append(f"File size {size_mb:.2f}MB exceeds maximum {max_mb:.2f}MB")
+            recommendations.append("Compress audio, reduce sample rate, or trim duration")
 
         is_valid = len(issues) == 0
 
