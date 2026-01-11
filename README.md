@@ -1,13 +1,13 @@
 # Talky Talky
 
-A Text-to-Speech MCP (Model Context Protocol) server for AI agents. Generate speech with multiple TTS engines, convert audio formats, and process audio files—all through a standardized interface that works with any MCP-compatible client.
+A comprehensive audio MCP (Model Context Protocol) server for AI agents. Generate speech, transcribe audio, clone voices, analyze speech quality, design soundscapes, and manage audio assets—all through a standardized interface that works with any MCP-compatible client.
 
 ## Quick Setup with AI Agents
 
 Copy and paste this prompt to your AI agent (Claude Code, Cursor, Windsurf, etc.) to have it automatically configure Talky Talky:
 
 ```
-Install and configure the Talky Talky MCP server for text-to-speech capabilities.
+Install and configure the Talky Talky MCP server for audio capabilities.
 
 1. Clone the repo: git clone https://github.com/shawnrushefsky/talky-talky.git
 2. Find the full path to uv: which uv (e.g., /Users/username/.local/bin/uv)
@@ -18,7 +18,7 @@ Install and configure the Talky Talky MCP server for text-to-speech capabilities
      "mcpServers": {
        "talky-talky": {
          "command": "/full/path/to/uv",
-         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "maya1", "--extra", "chatterbox", "--extra", "xtts", "--extra", "kokoro", "--extra", "vibevoice", "talky-talky"]
+         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "macos-full", "talky-talky"]
        }
      }
    }
@@ -28,7 +28,7 @@ Install and configure the Talky Talky MCP server for text-to-speech capabilities
      "mcpServers": {
        "talky-talky": {
          "command": "uv",
-         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "tts", "talky-talky"]
+         "args": ["run", "--directory", "<path-to-talky-talky>", "--extra", "tts", "--extra", "transcription", "--extra", "analysis", "talky-talky"]
        }
      }
    }
@@ -36,119 +36,161 @@ Install and configure the Talky Talky MCP server for text-to-speech capabilities
 4. Replace paths with actual values
 5. Restart the application and verify by checking TTS availability
 
-IMPORTANT for macOS:
-- GUI apps (Claude Desktop) don't inherit shell PATH - use full path to uv
-- Use individual extras (maya1, chatterbox, xtts, kokoro, vibevoice) instead of "tts" to avoid
-  CUDA-only dependencies (mira, soprano) that fail on macOS ARM64
+Platform extras:
+- macOS: macos-full (TTS + transcription + analysis, excludes CUDA-only engines)
+- Linux with CUDA: linux-cuda-full (all engines including CUDA-only)
+- CPU only: cpu-full
 
-Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS engines.
+Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engines.
 ```
 
 ---
 
-- [Talky Talky](#talky-talky)
-  - [Quick Setup with AI Agents](#quick-setup-with-ai-agents)
-  - [Features](#features)
-  - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Install from Source](#install-from-source)
-    - [Using uv (Recommended)](#using-uv-recommended)
-    - [Using Docker](#using-docker)
-      - [Basic Image (Audio Utilities Only)](#basic-image-audio-utilities-only)
-      - [With CUDA (GPU-Accelerated TTS)](#with-cuda-gpu-accelerated-tts)
-      - [Docker with MCP Clients](#docker-with-mcp-clients)
-  - [Configuration](#configuration)
-    - [Claude Desktop](#claude-desktop)
-    - [Claude Code (CLI)](#claude-code-cli)
-    - [Other MCP Clients](#other-mcp-clients)
-  - [Available Tools](#available-tools)
-    - [TTS Engine Tools](#tts-engine-tools)
-    - [Speech Generation Tools](#speech-generation-tools)
-    - [Audio Utility Tools](#audio-utility-tools)
-    - [Audio Asset Management Tools](#audio-asset-management-tools)
-    - [Audio Analysis Tools](#audio-analysis-tools)
-  - [TTS Engine Guide](#tts-engine-guide)
-    - [Maya1 (Voice Design)](#maya1-voice-design)
-    - [Chatterbox (Voice Cloning)](#chatterbox-voice-cloning)
-    - [Chatterbox Turbo (Fast Voice Cloning)](#chatterbox-turbo-fast-voice-cloning)
-    - [MiraTTS (Fast Voice Cloning)](#miratts-fast-voice-cloning)
-    - [XTTS-v2 (Multilingual)](#xtts-v2-multilingual)
-    - [Kokoro (Voice Selection)](#kokoro-voice-selection)
-    - [Soprano (Ultra-Fast TTS)](#soprano-ultra-fast-tts)
-    - [VibeVoice Realtime (Real-time TTS)](#vibevoice-realtime-real-time-tts)
-    - [VibeVoice Long-form (Multi-speaker TTS)](#vibevoice-long-form-multi-speaker-tts)
-    - [CosyVoice3 (Multilingual Voice Cloning)](#cosyvoice3-multilingual-voice-cloning)
-  - [Usage Examples](#usage-examples)
-    - [Generate Speech with Maya1](#generate-speech-with-maya1)
-    - [Clone a Voice with Chatterbox](#clone-a-voice-with-chatterbox)
-    - [Use Kokoro Pre-Built Voices](#use-kokoro-pre-built-voices)
-    - [Convert Audio Format](#convert-audio-format)
-    - [Concatenate Audio Files](#concatenate-audio-files)
-  - [Development](#development)
-  - [License](#license)
-  - [Contributing](#contributing)
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Available Tools](#available-tools)
+  - [TTS Engine Tools](#tts-engine-tools)
+  - [Speech Generation Tools](#speech-generation-tools)
+  - [Transcription Tools](#transcription-tools)
+  - [Audio Analysis Tools](#audio-analysis-tools)
+  - [Audio Design Tools](#audio-design-tools)
+  - [Audio Utility Tools](#audio-utility-tools)
+  - [Audio Asset Management Tools](#audio-asset-management-tools)
+- [TTS Engine Guide](#tts-engine-guide)
+- [Transcription Engine Guide](#transcription-engine-guide)
+- [Usage Examples](#usage-examples)
+- [Development](#development)
+- [License](#license)
 
 
 ## Features
 
-- **Multiple TTS Engines** (10 engines):
-  - **Maya1**: Natural language voice design with 20+ emotion tags (Apache 2.0)
-  - **Chatterbox**: Zero-shot multilingual voice cloning with emotion control (23 languages)
-  - **Chatterbox Turbo**: Fast voice cloning optimized for production (350M parameters)
-  - **MiraTTS**: Ultra-fast voice cloning at 100x realtime, 48kHz output (CUDA only)
-  - **XTTS-v2**: Cross-language voice cloning from just 6 seconds of audio (17 languages)
-  - **Kokoro**: 54 high-quality pre-built voices across 8 languages (82M parameters, Apache 2.0)
-  - **Soprano**: Ultra-fast TTS at 2000x realtime with 32kHz output (CUDA only)
-  - **VibeVoice Realtime**: Real-time TTS with ~300ms latency, single speaker (Microsoft, 0.5B)
-  - **VibeVoice Long-form**: Long-form multi-speaker TTS up to 90 minutes (Microsoft, 1.5B)
-  - **CosyVoice3**: Zero-shot multilingual voice cloning with instruction control (Alibaba, 9 languages)
-- **Audio Utilities**: Format conversion, concatenation, normalization
-- **Audio Asset Management**: Search and organize sound effects, music, and ambience
-  - Index local audio folders with SQLite FTS5 full-text search
-  - Freesound.org integration for Creative Commons licensed sounds
-  - License tracking for proper attribution (CC0, CC-BY, CC-BY-NC, etc.)
-- **Audio Analysis**: Comprehensive audio analysis tools
-  - **Speech Analysis**: Transcription, emotion detection, voice similarity, quality assessment
-  - **SFX Analysis**: Loudness/LUFS, clipping detection, spectral analysis, silence detection
-- **Cross-Platform**: Works on CUDA, MPS (Apple Silicon), and CPU
+### Text-to-Speech (11 Engines)
+
+| Engine | Description | Languages | License |
+|--------|-------------|-----------|---------|
+| **Maya1** | Voice design from natural language descriptions | Multi | Apache-2.0 |
+| **Chatterbox** | Voice cloning with emotion control | 23 | MIT |
+| **Chatterbox Turbo** | Fast voice cloning for production | 23 | MIT |
+| **MiraTTS** | Ultra-fast cloning at 100x realtime (CUDA) | Multi | MIT |
+| **XTTS-v2** | Cross-language voice cloning | 17 | CPML |
+| **Kokoro** | 54 pre-built voices, lightweight | 8 | Apache-2.0 |
+| **Soprano** | 2000x realtime speed (CUDA) | EN | Apache-2.0 |
+| **VibeVoice Realtime** | ~300ms latency real-time TTS | EN | MIT |
+| **VibeVoice Long-form** | Multi-speaker up to 90 min | EN/ZH | MIT |
+| **CosyVoice3** | Instruction-controlled cloning | 9 | Apache-2.0 |
+| **SeamlessM4T v2** | Translation + TTS, 200 speakers | 35 | CC-BY-NC-4.0 |
+
+### Speech-to-Text (2 Engines)
+
+| Engine | Description | Languages | Speed |
+|--------|-------------|-----------|-------|
+| **Whisper** | OpenAI's robust ASR via transformers | 99+ | 1x |
+| **Faster-Whisper** | CTranslate2-optimized Whisper | 99+ | 4x faster |
+
+### Audio Analysis
+
+- **Speech Quality**: MOS prediction, noisiness, discontinuity, coloration
+- **Emotion Detection**: 9 emotions (angry, happy, sad, surprised, etc.)
+- **Voice Similarity**: Speaker verification and comparison
+- **TTS Verification**: Automated quality checks for generated audio
+
+### SFX Analysis
+
+- **Loudness**: Peak, RMS, LUFS, dynamic range, true peak
+- **Clipping Detection**: Find digital distortion regions
+- **Spectral Analysis**: Frequency content, brightness, energy distribution
+- **Silence Detection**: Leading/trailing silence, gaps, content boundaries
+
+### Audio Design
+
+- **Mixing**: Layer multiple tracks with volume control
+- **Effects**: EQ (lowpass, highpass, bass, treble), reverb, echo, speed
+- **Fades**: Fade in/out with configurable duration
+- **Overlays**: Position-based audio layering
+- **Crossfades**: Smooth transitions between segments
+- **Trimming**: Auto-detect content boundaries, remove silence
+- **Silence Insertion**: Add controlled pauses between segments
+
+### Audio Asset Management
+
+- **Local Library**: Index and search local folders with SQLite FTS5
+- **Freesound.org**: Search and download CC-licensed sounds
+- **License Tracking**: CC0, CC-BY, CC-BY-NC, CC-BY-SA attribution
+- **Tagging**: Manual and AI-powered auto-tagging
+
+### Audio Utilities
+
+- **Format Conversion**: WAV, MP3, M4A with ffmpeg
+- **Concatenation**: Join files with optional gaps
+- **Normalization**: Broadcast standard (-16 LUFS)
+- **Playback**: System default audio player
+
+### Cross-Platform Support
+
+- **CUDA**: Full support with GPU acceleration
+- **MPS**: Apple Silicon support for most engines
+- **CPU**: Fallback for all engines (slower)
+
 
 ## Installation
 
 ### Prerequisites
 
-- **Python 3.11 or later** (required due to TTS library dependencies)
-- **ffmpeg** (required for audio conversion)
-- **GPU** (recommended for TTS, but CPU also supported)
+- **Python 3.11+** (required for TTS library compatibility)
+- **ffmpeg** (required for audio processing)
+- **GPU** (recommended for TTS and transcription)
 
-> **Don't have Python 3.11+?** We recommend using [uv](https://docs.astral.sh/uv/) which automatically manages Python versions:
+> **Don't have Python 3.11+?** Use [uv](https://docs.astral.sh/uv/) which auto-manages Python versions:
 > ```bash
-> # Install uv (if not already installed)
 > curl -LsSf https://astral.sh/uv/install.sh | sh
->
-> # uv will automatically use Python 3.11+ when running talky-talky
 > uv run --extra tts talky-talky
 > ```
-> Alternatively, use [pyenv](https://github.com/pyenv/pyenv) to install Python 3.11+.
 
-### Install from Source
+### Platform-Specific Installation
 
 ```bash
 git clone https://github.com/shawnrushefsky/talky-talky.git
 cd talky-talky
 
-# Basic installation (no TTS engines)
-pip install -e .
+# macOS (Apple Silicon or Intel)
+pip install -e ".[macos-full]"     # TTS + transcription + analysis
 
-# With specific TTS engines
-pip install -e ".[maya1]"      # Voice design from descriptions
-pip install -e ".[chatterbox]" # Voice cloning with emotion (includes Turbo)
-pip install -e ".[mira]"       # Fast voice cloning (CUDA only)
-pip install -e ".[xtts]"       # Multilingual voice cloning
-pip install -e ".[kokoro]"     # 54 pre-built voices (requires espeak-ng)
-pip install -e ".[soprano]"    # Ultra-fast TTS (CUDA only)
+# Linux with NVIDIA CUDA GPU
+pip install -e ".[linux-cuda-full]" # All engines including CUDA-only
 
-# All TTS engines
-pip install -e ".[tts]"
+# CPU only (no GPU)
+pip install -e ".[cpu-full]"        # Excludes CUDA-only engines
+```
+
+### Individual Components
+
+```bash
+# TTS engines
+pip install -e ".[maya1]"           # Voice design
+pip install -e ".[chatterbox]"      # Voice cloning (includes Turbo)
+pip install -e ".[xtts]"            # Multilingual cloning
+pip install -e ".[kokoro]"          # Pre-built voices
+pip install -e ".[seamlessm4t]"     # Multilingual + translation
+pip install -e ".[mira]"            # Fast cloning (CUDA only)
+pip install -e ".[soprano]"         # Ultra-fast (CUDA only)
+
+# Transcription
+pip install -e ".[whisper]"         # OpenAI Whisper
+pip install -e ".[faster-whisper]"  # 4x faster Whisper
+
+# Analysis
+pip install -e ".[emotion2vec]"     # Emotion detection
+pip install -e ".[resemblyzer]"     # Voice similarity
+pip install -e ".[nisqa]"           # Speech quality
+
+# Combined
+pip install -e ".[tts]"             # All TTS engines
+pip install -e ".[transcription]"   # All transcription engines
+pip install -e ".[analysis]"        # All analysis engines
 ```
 
 ### Using uv (Recommended)
@@ -157,143 +199,56 @@ pip install -e ".[tts]"
 git clone https://github.com/shawnrushefsky/talky-talky.git
 cd talky-talky
 
-# Install with uv
-uv pip install -e ".[tts]"
-
-# Or run directly without installing
-uv run --extra tts talky-talky
+# Run directly without installing
+uv run --extra macos-full talky-talky
 ```
 
 ### Using Docker
 
-Pre-built images are available on GitHub Container Registry.
-
-#### Basic Image (Audio Utilities Only)
-
-The default image includes audio utilities but not TTS engines (smaller image size):
-
 ```bash
+# Basic image (audio utilities only)
 docker pull ghcr.io/shawnrushefsky/talky-talky:latest
-
-# Run as MCP server (communicates via stdio)
 docker run -i ghcr.io/shawnrushefsky/talky-talky:latest
-```
 
-#### With CUDA (GPU-Accelerated TTS)
-
-For GPU-accelerated TTS, build a custom image with CUDA support:
-
-```dockerfile
-# Dockerfile.cuda
-FROM nvidia/cuda:12.1-runtime-ubuntu22.04
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3-pip ffmpeg git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-RUN python3.11 -m pip install --no-cache-dir talky-talky[tts]
-
-ENTRYPOINT ["python3.11", "-m", "talky_talky.server"]
-```
-
-Build and run with GPU access:
-
-```bash
-docker build -f Dockerfile.cuda -t talky-talky-cuda .
+# With GPU access
 docker run -i --gpus all talky-talky-cuda
 ```
 
-#### Docker with MCP Clients
-
-For Claude Desktop or other MCP clients, configure Docker as the command:
-
-```json
-{
-  "mcpServers": {
-    "talky-talky": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/shawnrushefsky/talky-talky:latest"]
-    }
-  }
-}
-```
-
-For CUDA-enabled Docker:
-
-```json
-{
-  "mcpServers": {
-    "talky-talky": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "--gpus", "all", "talky-talky-cuda"]
-    }
-  }
-}
-```
-
-> **Note:** Mount volumes for persistent audio files: `-v /path/to/audio:/audio`
 
 ## Configuration
 
 ### Claude Desktop
 
-Add to your Claude Desktop configuration file:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "talky-talky": {
-      "command": "talky-talky"
-    }
-  }
-}
-```
-
-Or with uv (no install required):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
 ```json
 {
   "mcpServers": {
     "talky-talky": {
       "command": "/full/path/to/uv",
-      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "macos-full", "talky-talky"]
     }
   }
 }
 ```
 
-> **Important for macOS users:**
-> - GUI apps like Claude Desktop don't inherit your shell's PATH. Use the **full path to uv** (find it with `which uv`, e.g., `/Users/username/.local/bin/uv`)
-> - On macOS ARM64 (Apple Silicon), use individual extras instead of `--extra tts` to avoid CUDA-only dependencies that don't have macOS wheels:
->   ```json
->   "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "maya1", "--extra", "chatterbox", "--extra", "xtts", "--extra", "kokoro", "--extra", "vibevoice", "talky-talky"]
->   ```
-> - This includes: Maya1, Chatterbox (+ Turbo), XTTS, Kokoro, and VibeVoice which all support MPS (Apple Silicon)
+> **macOS Note:** GUI apps don't inherit shell PATH. Use full path to uv (`which uv`).
 
-### Claude Code (CLI)
+### Claude Code / CLI
 
-Add to your project's `.mcp.json`:
+Add to `.mcp.json` or `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "talky-talky": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "talky-talky"]
+      "args": ["run", "--directory", "/path/to/talky-talky", "--extra", "tts", "--extra", "transcription", "talky-talky"]
     }
   }
 }
 ```
 
-Or add to `~/.claude/settings.json` for global access.
-
-### Other MCP Clients
-
-Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cline, Continue.dev, and Zed. Configure them to run `talky-talky` as the command.
 
 ## Available Tools
 
@@ -301,58 +256,38 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 
 | Tool | Description |
 |------|-------------|
-| `check_tts_availability` | Check which TTS engines are available and device info |
-| `get_tts_engines_info` | Get detailed info about all engines including parameters |
-| `list_available_engines` | List currently installed engines |
-| `get_tts_model_status` | Check if Maya1 models are downloaded |
-| `download_tts_models` | Download Maya1 model weights (~10GB) |
+| `check_tts_availability` | Check available engines and device info |
+| `get_tts_engines_info` | Get detailed engine info and parameters |
+| `list_available_engines` | List installed engines |
+| `get_tts_model_status` | Check Maya1 model download status |
+| `download_tts_models` | Download Maya1 models (~10GB) |
 
 ### Speech Generation Tools
 
 | Tool | Description |
 |------|-------------|
-| `speak_maya1` | Generate speech with voice description (text-prompted) |
-| `speak_chatterbox` | Generate speech with voice cloning and emotion control |
-| `speak_chatterbox_turbo` | Fast voice cloning optimized for production |
-| `speak_mira` | Fast voice cloning with 48kHz output (CUDA required) |
-| `speak_xtts` | Multilingual voice cloning (17 languages) |
-| `speak_kokoro` | Use pre-built voices (54 voices, 8 languages) |
-| `speak_soprano` | Ultra-fast TTS at 2000x realtime (CUDA required) |
-| `speak_vibevoice_realtime` | Real-time TTS with ~300ms latency |
-| `speak_vibevoice_longform` | Long-form multi-speaker TTS (up to 90 min) |
-| `speak_cosyvoice` | Multilingual voice cloning with instruction control |
+| `speak_maya1` | Generate with voice description |
+| `speak_chatterbox` | Voice cloning with emotion control |
+| `speak_chatterbox_turbo` | Fast voice cloning |
+| `speak_mira` | Fast cloning, 48kHz (CUDA) |
+| `speak_xtts` | Multilingual cloning (17 languages) |
+| `speak_kokoro` | Pre-built voices (54 voices) |
+| `speak_soprano` | Ultra-fast TTS (CUDA) |
+| `speak_vibevoice_realtime` | Real-time TTS |
+| `speak_vibevoice_longform` | Long-form multi-speaker |
+| `speak_cosyvoice` | Instruction-controlled cloning |
+| `speak_seamlessm4t` | Multilingual TTS + translation |
 
-### Audio Utility Tools
-
-| Tool | Description |
-|------|-------------|
-| `get_audio_file_info` | Get audio file info (duration, format, size) |
-| `convert_audio_format` | Convert between formats (wav, mp3, m4a) |
-| `join_audio_files` | Concatenate multiple audio files |
-| `normalize_audio_levels` | Normalize to broadcast standard (-16 LUFS) |
-| `check_ffmpeg_available` | Check ffmpeg installation |
-| `play_audio` | Play audio file with system's default player |
-| `set_output_directory` | Set default directory for saving audio files |
-| `get_output_directory` | Get current default output directory |
-
-### Audio Asset Management Tools
+### Transcription Tools
 
 | Tool | Description |
 |------|-------------|
-| `list_asset_sources` | List available asset sources (local, Freesound) |
-| `search_audio_assets` | Search for sound effects, music, and ambience |
-| `get_audio_asset` | Get detailed info about an asset |
-| `download_audio_asset` | Download remote asset to local storage |
-| `import_audio_folder` | Import local audio folder into asset library |
-| `configure_freesound_api` | Configure Freesound.org API key |
-| `set_audio_library_path` | Set custom library storage path |
-| `get_audio_library_path` | Get current library path |
-| `add_asset_tags` | Add tags to an asset for organization |
-| `remove_asset_tags` | Remove tags from an asset |
-| `list_all_asset_tags` | List all tags with usage counts |
-| `list_indexed_audio_folders` | List indexed local folders |
-| `rescan_audio_folder` | Rescan folder for new files |
-| `remove_indexed_audio_folder` | Remove folder from index |
+| `check_transcription_availability` | Check transcription engine status |
+| `get_transcription_engines_info` | Get engine details |
+| `list_available_transcription_engines` | List installed engines |
+| `transcribe_audio` | Transcribe audio to text |
+| `transcribe_with_timestamps` | Transcribe with word-level timing |
+| `verify_tts_output` | Verify TTS matches expected text |
 
 ### Audio Analysis Tools
 
@@ -360,347 +295,219 @@ Talky Talky works with any MCP-compatible client including Cursor, Windsurf, Cli
 
 | Tool | Description |
 |------|-------------|
-| `check_analysis_availability` | Check which speech analysis engines are available |
-| `get_analysis_engines_info` | Get detailed info about all analysis engines |
-| `transcribe_audio` | Transcribe audio to text (99+ languages) |
-| `transcribe_with_timestamps` | Transcribe with word-level timestamps |
-| `verify_tts_output` | Verify TTS audio matches expected text |
-| `analyze_emotion` | Detect emotion in audio (9 emotions) |
-| `analyze_voice_similarity` | Compare two audio files for voice similarity |
-| `extract_voice_embedding` | Get voice embedding vector for comparison |
-| `analyze_speech_quality` | Assess speech quality (MOS score 1-5) |
-| `verify_tts_comprehensive` | Combined verification (text, voice, emotion, quality) |
+| `check_analysis_availability` | Check analysis engine status |
+| `get_analysis_engines_info` | Get engine details |
+| `analyze_emotion` | Detect emotion (9 categories) |
+| `analyze_voice_similarity` | Compare voices for similarity |
+| `extract_voice_embedding` | Get voice embedding vector |
+| `analyze_speech_quality` | MOS score and quality dimensions |
+| `verify_tts_comprehensive` | Combined quality verification |
 
 #### SFX Analysis
 
 | Tool | Description |
 |------|-------------|
-| `check_sfx_analysis_availability` | Check if SFX analysis tools are available |
-| `analyze_audio_loudness` | Measure peak, RMS, LUFS, dynamic range, true peak |
-| `detect_audio_clipping` | Find clipped samples and regions of digital distortion |
-| `analyze_audio_spectrum` | Analyze frequency content, brightness, energy distribution |
-| `detect_audio_silence` | Find leading/trailing silence and gaps in audio |
-| `validate_audio_format` | Validate sample rate, channels, bit depth against targets |
+| `check_sfx_analysis_availability` | Check SFX tools availability |
+| `analyze_audio_loudness` | Peak, RMS, LUFS, dynamic range |
+| `detect_audio_clipping` | Find clipped samples/regions |
+| `analyze_audio_spectrum` | Frequency and energy analysis |
+| `detect_audio_silence` | Find silence regions and gaps |
+| `validate_audio_format` | Validate against target specs |
+
+### Audio Design Tools
+
+| Tool | Description |
+|------|-------------|
+| `mix_audio_tracks` | Layer multiple tracks together |
+| `adjust_audio_volume` | Volume control (multiplier or dB) |
+| `apply_audio_fade` | Fade in/out effects |
+| `apply_audio_effects` | EQ, reverb, echo, speed |
+| `overlay_audio_track` | Position-based audio overlay |
+| `crossfade_join_audio` | Smooth transitions between clips |
+| `trim_audio_file` | Trim with auto silence detection |
+| `insert_audio_silence` | Add controlled pauses |
+| `batch_analyze_silence` | Batch silence detection |
+
+### Audio Utility Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_audio_file_info` | Get duration, format, size |
+| `convert_audio_format` | Convert WAV/MP3/M4A |
+| `join_audio_files` | Concatenate with optional gaps |
+| `normalize_audio_levels` | Normalize to -16 LUFS |
+| `check_ffmpeg_available` | Check ffmpeg installation |
+| `play_audio` | Play with system player |
+| `set_output_directory` | Set default output path |
+| `get_output_directory` | Get current output path |
+
+### Audio Asset Management Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_asset_sources` | List sources (local, Freesound) |
+| `search_audio_assets` | Search SFX, music, ambience |
+| `get_audio_asset` | Get asset details |
+| `download_audio_asset` | Download to local storage |
+| `import_audio_folder` | Import folder to library |
+| `configure_freesound_api` | Set Freesound API key |
+| `add_asset_tags` | Add tags to asset |
+| `remove_asset_tags` | Remove tags from asset |
+| `list_all_asset_tags` | List all tags with counts |
+| `auto_tag_audio_asset` | AI-powered auto-tagging |
+| `check_autotag_availability` | Check auto-tag engines |
+
 
 ## TTS Engine Guide
 
-### Engine License Summary
-
-| Engine | License | Link |
-|--------|---------|------|
-| Maya1 | Apache-2.0 | [HuggingFace](https://huggingface.co/maya-research/maya1) |
-| Chatterbox | MIT | [GitHub](https://github.com/resemble-ai/chatterbox) |
-| Chatterbox Turbo | MIT | [GitHub](https://github.com/resemble-ai/chatterbox) |
-| MiraTTS | MIT | [HuggingFace](https://huggingface.co/YatharthS/MiraTTS) |
-| XTTS-v2 | CPML | [Coqui](https://coqui.ai/cpml) |
-| Kokoro | Apache-2.0 | [GitHub](https://github.com/hexgrad/kokoro) |
-| Soprano | Apache-2.0 | [HuggingFace](https://huggingface.co/SopranoAI/soprano-mlx) |
-| VibeVoice | MIT | [GitHub](https://github.com/microsoft/VibeVoice) |
-| CosyVoice3 | Apache-2.0 | [GitHub](https://github.com/FunAudioLLM/CosyVoice) |
-
 ### Maya1 (Voice Design)
 
-A 3B parameter model that creates unique voices from natural language descriptions—like briefing an actor. No reference audio needed. Fully open-source under Apache 2.0.
+Create unique voices from natural language descriptions with 20+ emotion tags.
 
-**Voice Description Example:**
-```
-Realistic female voice in the 20s age with american accent.
-Medium-high pitch, bright timbre, energetic pacing, enthusiastic tone.
-```
-
-**Emotion Tags (20+ supported):**
-```
-<laugh> <chuckle> <sigh> <gasp> <whisper> <angry> <yell> <cry> <cough>
-```
-
-**Example:**
 ```python
 speak_maya1(
-    text="I can't believe it worked! <laugh> We actually did it!",
-    output_path="/tmp/output.wav",
+    text="I can't believe it! <laugh> We did it!",
+    output_path="output.wav",
     voice_description="Excited young woman, American accent, energetic"
 )
 ```
 
-**Requirements:** CUDA GPU with 16GB+ VRAM (best), MPS, or CPU. Outputs 24kHz audio.
+**Emotion Tags:** `<laugh>` `<chuckle>` `<sigh>` `<gasp>` `<whisper>` `<angry>` `<yell>` `<cry>` `<cough>`
 
 ### Chatterbox (Voice Cloning)
 
-Zero-shot multilingual voice cloning with emotion/intensity control. Supports 23 languages including English, Spanish, French, German, Chinese, Japanese, Korean, Arabic, and more. The first open-source TTS with exaggeration control. Outperforms ElevenLabs in side-by-side evaluations.
+Zero-shot voice cloning with emotion control. 23 languages.
 
-**Supported Languages:** Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swahili, Swedish, Turkish
-
-**Emotion Tags:**
-```
-[laugh] [chuckle] [cough] [sigh] [gasp]
-```
-
-**Parameters:**
-- `exaggeration`: 0.0-1.0+, controls expressiveness/intensity (default 0.5)
-- `cfg_weight`: Controls pacing, lower = slower (default 0.5)
-
-**Example:**
 ```python
 speak_chatterbox(
-    text="Hello there! [chuckle] Nice to meet you.",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"],
-    exaggeration=0.6
+    text="Hello! [chuckle] Nice to meet you.",
+    output_path="output.wav",
+    reference_audio_paths=["reference.wav"],
+    exaggeration=0.6  # 0.0-1.0+ for expressiveness
 )
 ```
 
-**Requirements:** Works on CUDA, MPS, and CPU. Outputs 24kHz audio.
+### SeamlessM4T v2 (Multilingual + Translation)
 
-### Chatterbox Turbo (Fast Voice Cloning)
+Generate speech in 35 languages with optional translation.
 
-Streamlined 350M parameter model optimized for low-latency voice cloning in production voice agents. Faster than standard Chatterbox with a simpler API (no tuning parameters).
-
-**Emotion Tags:**
-```
-[laugh] [chuckle] [cough]
-```
-
-**Example:**
 ```python
-speak_chatterbox_turbo(
-    text="Hi there! [chuckle] Thanks for calling.",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"]
+# Pure TTS
+speak_seamlessm4t(
+    text="Hello world",
+    output_path="hello.wav",
+    language="en"
+)
+
+# Translate English to French speech
+speak_seamlessm4t(
+    text="Hello world",
+    output_path="bonjour.wav",
+    src_language="en",
+    language="fr",
+    speaker_id=5  # 200 speaker options
 )
 ```
 
-**Requirements:** Works on CUDA, MPS, and CPU. Outputs 24kHz audio. <200ms production latency.
+### Kokoro (Pre-built Voices)
 
-### MiraTTS (Fast Voice Cloning)
+54 high-quality voices, 8 languages, lightweight (82M).
 
-Ultra-fast voice cloning optimized for speed and efficiency. Over 100x realtime with batching, latency as low as 100ms. Outputs high-quality 48kHz audio (higher than most TTS models).
-
-**Example:**
-```python
-speak_mira(
-    text="The quick brown fox jumps over the lazy dog.",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"]
-)
-```
-
-**Requirements:** NVIDIA GPU with CUDA (6GB+ VRAM). Does NOT support MPS or CPU. Outputs 48kHz audio.
-
-### XTTS-v2 (Multilingual)
-
-Voice cloning from just a 6-second audio clip with cross-language capabilities. Clone a voice in one language and generate speech in another while preserving voice characteristics. Powers Coqui Studio and API.
-
-**Supported Languages (17):**
-English, Spanish, French, German, Italian, Portuguese, Polish, Turkish, Russian, Dutch, Czech, Arabic, Chinese, Japanese, Hungarian, Korean, Hindi
-
-**Example:**
-```python
-# Clone an English voice to speak Spanish
-speak_xtts(
-    text="Hola, ¿cómo estás?",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/english_reference.wav"],
-    language="es"
-)
-```
-
-**Requirements:** Works on CUDA, MPS, and CPU. Model downloads automatically (~6GB). Outputs 24kHz audio.
-
-### Kokoro (Voice Selection)
-
-Lightweight 82M parameter TTS model with 54 high-quality pre-built voices across 8 languages. No voice cloning or description needed—just select a voice ID. Very fast and runs on any hardware including edge devices. Apache 2.0 licensed.
-
-**Supported Languages (8):**
-American English, British English, Japanese, Mandarin Chinese, Spanish, French, Hindi, Italian, Portuguese
-
-**Voice ID Format:** `[lang][gender]_[name]`
-- `a` = American English, `b` = British English, `j` = Japanese, `z` = Mandarin
-- `f` = female, `m` = male
-
-**Popular Voices:**
-- `af_heart`, `af_bella` - American English female (quality A)
-- `am_fenrir`, `am_michael` - American English male (quality B)
-- `bf_emma`, `bm_george` - British English
-- `jf_alpha`, `jm_kumo` - Japanese
-
-**Example:**
 ```python
 speak_kokoro(
-    text="Welcome to the future of text-to-speech.",
-    output_path="/tmp/output.wav",
-    voice="af_heart",
+    text="Welcome!",
+    output_path="output.wav",
+    voice="af_heart",  # American female
     speed=1.0
 )
 ```
 
-**Requirements:** Requires `espeak-ng` system dependency. Runs on CUDA, MPS, or CPU. Outputs 24kHz audio.
+**Voice Format:** `[lang][gender]_[name]` (e.g., `af_heart`, `bm_george`, `jf_alpha`)
 
-### Soprano (Ultra-Fast TTS)
+See [CLAUDE.md](CLAUDE.md) for complete documentation on all engines.
 
-Ultra-lightweight 80M parameter model with exceptional speed—2000x realtime (10 hours of audio in <20 seconds). Outputs high-fidelity 32kHz audio with <15ms streaming latency. Single built-in voice, no customization.
 
-**Example:**
+## Transcription Engine Guide
+
+### Faster-Whisper (Recommended)
+
+4x faster than standard Whisper with same accuracy.
+
 ```python
-speak_soprano(
-    text="The quick brown fox jumps over the lazy dog.",
-    output_path="/tmp/output.wav",
-    temperature=0.3
+transcribe_audio(
+    audio_path="speech.wav",
+    engine="faster_whisper",
+    model_size="large-v3",  # tiny, base, small, medium, large-v3
+    language="en"  # or None for auto-detection
 )
 ```
 
-**Parameters:**
-- `temperature`: Sampling randomness (default 0.3)
-- `top_p`: Nucleus sampling (default 0.95)
-- `repetition_penalty`: Prevents repetition (default 1.2)
+### With Timestamps
 
-**Requirements:** NVIDIA GPU with CUDA required. Does NOT support MPS or CPU. Outputs 32kHz audio.
-
-### VibeVoice Realtime (Real-time TTS)
-
-Microsoft's real-time TTS with ~300ms first-audio latency. Single speaker with multiple voice options. Ideal for real-time applications.
-
-**Installation:**
-```bash
-git clone https://github.com/microsoft/VibeVoice.git
-cd VibeVoice
-pip install -e .
-```
-
-**Available Speakers:** Carter, Emily, Nova, Michael, Sarah
-
-**Example:**
 ```python
-speak_vibevoice_realtime(
-    text="Welcome to our service!",
-    output_path="/tmp/output.wav",
-    speaker_name="Carter"
+transcribe_with_timestamps(
+    audio_path="speech.wav",
+    word_level=True  # Get word-level timing
 )
 ```
 
-**Requirements:** Works on CUDA, MPS, and CPU. English primary, other languages experimental. Outputs 24kHz audio.
+### TTS Verification
 
-> **Note:** VibeVoice has dependency conflicts with Chatterbox. Install in a separate environment if needed.
-
-### VibeVoice Long-form (Multi-speaker TTS)
-
-Microsoft's long-form TTS for podcasts and conversations. Supports up to 90 minutes and 4 speakers with natural turn-taking.
-
-**Installation:**
-```bash
-git clone https://github.com/microsoft/VibeVoice.git
-cd VibeVoice
-pip install -e .
-```
-
-**Example:**
 ```python
-# Single speaker
-speak_vibevoice_longform(
-    text="This is a long-form narration...",
-    output_path="/tmp/output.wav",
-    speaker_name="Carter"
-)
-
-# Multi-speaker dialogue
-speak_vibevoice_longform(
-    text="Speaker1: Hello! Speaker2: Hi there!",
-    output_path="/tmp/dialogue.wav",
-    speakers=["Carter", "Emily"]
+verify_tts_output(
+    audio_path="generated.wav",
+    expected_text="Hello world",
+    similarity_threshold=0.8
 )
 ```
 
-**Requirements:** GPU recommended (~6-8GB VRAM). Supports English and Chinese. Outputs 24kHz audio.
-
-### CosyVoice3 (Multilingual Voice Cloning)
-
-Alibaba's zero-shot voice cloning with instruction-based control for dialect, emotion, and speed. Supports 9 languages and 18+ Chinese dialects.
-
-**Installation:**
-```bash
-git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
-cd CosyVoice
-conda create -n cosyvoice -y python=3.10
-conda activate cosyvoice
-pip install -r requirements.txt
-
-# Install sox (Ubuntu: apt-get install sox libsox-dev, macOS: brew install sox)
-```
-
-**Supported Languages (9):**
-Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
-
-**Supported Chinese Dialects (18+):**
-Cantonese, Sichuan, Shanghai, Taiwan, Dongbei, and more via instruction control
-
-**Example:**
-```python
-# Zero-shot cloning
-speak_cosyvoice(
-    text="Hello, this is a test.",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"],
-    prompt_text="Optional transcript of reference audio"
-)
-
-# With instruction control (Cantonese)
-speak_cosyvoice(
-    text="好少咯，一般系放嗰啲国庆啊",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"],
-    instruction="请用广东话表达。"
-)
-
-# With breathing tags
-speak_cosyvoice(
-    text="[breath]因为他们那一辈人[breath]在乡里面住的要习惯一点",
-    output_path="/tmp/output.wav",
-    reference_audio_paths=["/path/to/reference.wav"]
-)
-```
-
-**Parameters:**
-- `prompt_text`: Transcript of reference audio (improves quality)
-- `instruction`: Natural language style control (dialect, speed, emotion)
-- `language`: Target language code (auto-detected by default)
-
-**Requirements:** GPU recommended. Works on CUDA and CPU. Outputs 22kHz audio.
 
 ## Usage Examples
 
-### Generate Speech with Maya1
+### Generate Narration with Custom Voice
 
 ```
-Generate speech saying "Welcome to the future of AI" with a deep male narrator voice, save to /tmp/welcome.wav
+Generate speech saying "Welcome to the future of AI" with a deep male narrator voice using Maya1
 ```
 
-### Clone a Voice with Chatterbox
+### Clone a Voice
 
 ```
-Use Chatterbox to clone the voice from /path/to/sample.wav and say "This is a test of voice cloning" with high expressiveness
+Clone the voice from sample.wav using Chatterbox and say "This is voice cloning" with high expressiveness
 ```
 
-### Use Kokoro Pre-Built Voices
+### Transcribe Audio
 
 ```
-Use Kokoro with the af_heart voice to say "Hello and welcome!" and save to /tmp/greeting.wav
+Transcribe the audio file interview.wav with word-level timestamps
 ```
 
-### Convert Audio Format
+### Create a Podcast Intro
 
 ```
-Convert /tmp/speech.wav to MP3 format
+1. Generate intro music search for "podcast intro" sounds
+2. Generate speech: "Welcome to Tech Talk" with a professional voice
+3. Mix the music and speech together with music at 20% volume
+4. Add fade in/out effects
 ```
 
-### Concatenate Audio Files
+### Analyze Speech Quality
 
 ```
-Join these audio files into one: /tmp/intro.wav, /tmp/main.wav, /tmp/outro.wav
+Analyze the speech quality of generated.wav and check if it meets broadcast standards
 ```
+
+### Translate and Speak
+
+```
+Use SeamlessM4T to translate "Hello, how are you?" from English to Japanese speech
+```
+
 
 ## Development
 
 ```bash
-# Install development dependencies
+# Install dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
@@ -711,12 +518,20 @@ ruff check talky_talky
 ruff format talky_talky
 ```
 
-This project uses `uv` for package management. Always use `uv run` to execute Python commands.
+This project uses `uv` for package management.
+
 
 ## License
 
 MIT
 
+Individual TTS engines have their own licenses:
+- **Apache-2.0**: Maya1, Kokoro, Soprano, CosyVoice3
+- **MIT**: Chatterbox, MiraTTS, VibeVoice
+- **CPML**: XTTS-v2 (Coqui Public Model License)
+- **CC-BY-NC-4.0**: SeamlessM4T v2 (non-commercial only)
+
+
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+Contributions welcome! Please open an issue or submit a pull request.
