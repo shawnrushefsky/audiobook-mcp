@@ -28,30 +28,40 @@ Audio Asset Management:
 Plus audio utilities for format conversion and concatenation.
 """
 
-import json
 import subprocess
 import sys
-from dataclasses import asdict
-from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
+# Import configuration utilities
+from .config import (
+    VERSION,
+    CONFIG_DIR,
+    CONFIG_FILE,
+    DEFAULT_OUTPUT_DIR,
+    _load_config,
+    _save_config,
+    get_output_dir,
+    resolve_output_path,
+    to_dict,
+)
+
 # Import TTS module
-from .tools.tts import (
+from ..tools.tts import (
     check_tts,
     get_tts_info,
     get_available_engines,
     list_engines,
     generate,
 )
-from .tools.tts.maya1 import (
+from ..tools.tts.maya1 import (
     check_models_downloaded as check_maya1_models,
     download_models as download_maya1_models,
 )
 
 # Import audio utilities
-from .tools.audio import (
+from ..tools.audio import (
     get_audio_info,
     convert_audio,
     concatenate_audio,
@@ -77,7 +87,7 @@ from .tools.audio import (
 )
 
 # Import autotune module
-from .tools.autotune import (
+from ..tools.autotune import (
     autotune as autotune_audio,
     detect_pitch as detect_audio_pitch,
     list_keys as get_autotune_keys,
@@ -85,7 +95,7 @@ from .tools.autotune import (
 )
 
 # Import transcription module
-from .tools.transcription import (
+from ..tools.transcription import (
     check_transcription,
     get_transcription_info,
     get_available_engines as get_available_transcription_engines,
@@ -94,7 +104,7 @@ from .tools.transcription import (
 )
 
 # Import analysis module
-from .tools.analysis import (
+from ..tools.analysis import (
     detect_emotion,
     compare_voices,
     get_voice_embedding,
@@ -113,26 +123,26 @@ from .tools.analysis import (
 )
 
 # Import song generation module
-from .tools.songgen import (
+from ..tools.songgen import (
     check_songgen,
     get_info as get_songgen_info,
     get_available_engines as get_available_songgen_engines,
     generate as generate_song,
 )
-from .tools.songgen.levo import (
+from ..tools.songgen.levo import (
     check_models_downloaded as check_songgen_models,
     download_models as download_songgen_models_impl,
     MODELS as SONGGEN_MODELS,
     STRUCTURE_MARKERS as SONGGEN_STRUCTURE_MARKERS,
     STYLE_PROMPTS as SONGGEN_STYLE_PROMPTS,
 )
-from .tools.songgen.acestep import (
+from ..tools.songgen.acestep import (
     check_models_downloaded as check_acestep_models,
     download_models as download_acestep_models_impl,
 )
 
 # Import assets module
-from .tools.assets import (
+from ..tools.assets import (
     search_assets as search_assets_async,
     get_asset as get_asset_async,
     download_asset as download_asset_async,
@@ -153,70 +163,8 @@ from .tools.assets import (
 )
 
 
-# Server version
-VERSION = "0.2.0"
-
 # Initialize MCP server
 mcp = FastMCP("talky-talky")
-
-
-# ============================================================================
-# Configuration
-# ============================================================================
-
-CONFIG_DIR = Path.home() / ".config" / "talky-talky"
-CONFIG_FILE = CONFIG_DIR / "config.json"
-DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "talky-talky"
-
-
-def _load_config() -> dict:
-    """Load configuration from file."""
-    if CONFIG_FILE.exists():
-        try:
-            return json.loads(CONFIG_FILE.read_text())
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {}
-
-
-def _save_config(config: dict) -> None:
-    """Save configuration to file."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.write_text(json.dumps(config, indent=2))
-
-
-def get_output_dir() -> Path:
-    """Get the configured output directory, creating it if needed."""
-    config = _load_config()
-    output_dir = Path(config.get("output_directory", str(DEFAULT_OUTPUT_DIR)))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
-
-
-def resolve_output_path(output_path: str) -> str:
-    """Resolve output path, using default directory if path is just a filename."""
-    path = Path(output_path)
-    # If it's just a filename (no directory components), use the configured output dir
-    if path.parent == Path(".") or str(path.parent) == "":
-        return str(get_output_dir() / path.name)
-    # Otherwise, ensure the parent directory exists
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return str(path)
-
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-
-def to_dict(obj) -> dict:
-    """Convert dataclass to dict, handling nested objects."""
-    if hasattr(obj, "__dataclass_fields__"):
-        return asdict(obj)
-    elif isinstance(obj, dict):
-        return obj
-    else:
-        return {"value": obj}
 
 
 # ============================================================================

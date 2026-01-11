@@ -243,7 +243,7 @@ dev = [
 ]
 
 [project.scripts]
-talky-talky = "talky_talky.server:main"
+talky-talky = "talky_talky.server.app:main"
 
 [build-system]
 requires = ["hatchling"]

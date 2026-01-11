@@ -5,16 +5,36 @@ Provides loudness analysis, clipping detection, spectral analysis, silence detec
 and format validation.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 import time
 
 
 @dataclass
-class LoudnessResult:
-    """Result of loudness analysis."""
+class SFXAnalysisResult:
+    """Base class for SFX analysis results.
+
+    All SFX analysis result dataclasses inherit from this to share common fields
+    and the to_dict() implementation.
+    """
 
     status: str
+    processing_time_ms: int = 0
+    error: str | None = None
+    metadata: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """Convert the result to a dictionary.
+
+        Uses dataclass introspection to automatically include all fields.
+        """
+        return {f.name: getattr(self, f.name) for f in fields(self)}
+
+
+@dataclass
+class LoudnessResult(SFXAnalysisResult):
+    """Result of loudness analysis."""
+
     peak_db: float = 0.0  # Peak level in dBFS
     peak_linear: float = 0.0  # Peak level as linear value (0-1)
     rms_db: float = 0.0  # RMS level in dBFS
@@ -22,61 +42,24 @@ class LoudnessResult:
     dynamic_range_db: float = 0.0  # Difference between peak and RMS
     true_peak_db: float = 0.0  # Inter-sample true peak in dBTP
     is_clipping: bool = False  # True if peak >= 0 dBFS
-    processing_time_ms: int = 0
-    error: str | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "peak_db": self.peak_db,
-            "peak_linear": self.peak_linear,
-            "rms_db": self.rms_db,
-            "lufs": self.lufs,
-            "dynamic_range_db": self.dynamic_range_db,
-            "true_peak_db": self.true_peak_db,
-            "is_clipping": self.is_clipping,
-            "processing_time_ms": self.processing_time_ms,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
 
 
 @dataclass
-class ClippingResult:
+class ClippingResult(SFXAnalysisResult):
     """Result of clipping detection."""
 
-    status: str
     has_clipping: bool = False
     clipped_samples: int = 0  # Number of clipped samples
     clipped_percentage: float = 0.0  # Percentage of samples that are clipped
     total_samples: int = 0
     clipped_regions: list = field(default_factory=list)  # List of (start_ms, end_ms) tuples
     max_consecutive_clipped: int = 0  # Longest run of clipped samples
-    processing_time_ms: int = 0
-    error: str | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "has_clipping": self.has_clipping,
-            "clipped_samples": self.clipped_samples,
-            "clipped_percentage": self.clipped_percentage,
-            "total_samples": self.total_samples,
-            "clipped_regions": self.clipped_regions,
-            "max_consecutive_clipped": self.max_consecutive_clipped,
-            "processing_time_ms": self.processing_time_ms,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
 
 
 @dataclass
-class SpectralResult:
+class SpectralResult(SFXAnalysisResult):
     """Result of spectral analysis."""
 
-    status: str
     dominant_frequency_hz: float = 0.0  # Most prominent frequency
     frequency_centroid_hz: float = 0.0  # Spectral centroid (brightness)
     bandwidth_hz: float = 0.0  # Spectral bandwidth
@@ -85,32 +68,12 @@ class SpectralResult:
     high_freq_energy: float = 0.0  # Energy in 4000-20000 Hz (highs)
     rolloff_hz: float = 0.0  # Frequency below which 85% of energy exists
     zero_crossing_rate: float = 0.0  # Rate of sign changes (noisiness indicator)
-    processing_time_ms: int = 0
-    error: str | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "dominant_frequency_hz": self.dominant_frequency_hz,
-            "frequency_centroid_hz": self.frequency_centroid_hz,
-            "bandwidth_hz": self.bandwidth_hz,
-            "low_freq_energy": self.low_freq_energy,
-            "mid_freq_energy": self.mid_freq_energy,
-            "high_freq_energy": self.high_freq_energy,
-            "rolloff_hz": self.rolloff_hz,
-            "zero_crossing_rate": self.zero_crossing_rate,
-            "processing_time_ms": self.processing_time_ms,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
 
 
 @dataclass
-class SilenceResult:
+class SilenceResult(SFXAnalysisResult):
     """Result of silence detection."""
 
-    status: str
     leading_silence_ms: float = 0.0  # Silence at start
     trailing_silence_ms: float = 0.0  # Silence at end
     total_silence_ms: float = 0.0  # Total silence duration
@@ -119,32 +82,12 @@ class SilenceResult:
     content_start_ms: float = 0.0  # Where actual content begins
     content_end_ms: float = 0.0  # Where actual content ends
     content_duration_ms: float = 0.0  # Duration of non-silent content
-    processing_time_ms: int = 0
-    error: str | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "leading_silence_ms": self.leading_silence_ms,
-            "trailing_silence_ms": self.trailing_silence_ms,
-            "total_silence_ms": self.total_silence_ms,
-            "silence_percentage": self.silence_percentage,
-            "silence_regions": self.silence_regions,
-            "content_start_ms": self.content_start_ms,
-            "content_end_ms": self.content_end_ms,
-            "content_duration_ms": self.content_duration_ms,
-            "processing_time_ms": self.processing_time_ms,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
 
 
 @dataclass
-class FormatValidationResult:
+class FormatValidationResult(SFXAnalysisResult):
     """Result of format validation."""
 
-    status: str
     is_valid: bool = False
     sample_rate: int = 0
     channels: int = 0
@@ -154,26 +97,6 @@ class FormatValidationResult:
     file_size_bytes: int = 0
     issues: list = field(default_factory=list)  # List of validation issues
     recommendations: list = field(default_factory=list)  # Suggested fixes
-    processing_time_ms: int = 0
-    error: str | None = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "is_valid": self.is_valid,
-            "sample_rate": self.sample_rate,
-            "channels": self.channels,
-            "bit_depth": self.bit_depth,
-            "duration_ms": self.duration_ms,
-            "format": self.format,
-            "file_size_bytes": self.file_size_bytes,
-            "issues": self.issues,
-            "recommendations": self.recommendations,
-            "processing_time_ms": self.processing_time_ms,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
 
 
 def _check_available() -> bool:
