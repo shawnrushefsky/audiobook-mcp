@@ -124,7 +124,7 @@ __all__ = [..., "MyEngine"]
 
 ## Step 3: Add the MCP Tool
 
-In `talky_talky/server.py`:
+In `talky_talky/server/app.py`:
 
 ```python
 @mcp.tool()

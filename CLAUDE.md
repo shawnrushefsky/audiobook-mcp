@@ -39,16 +39,30 @@ MCP server providing Text-to-Speech, Speech-to-Text, and audio processing for AI
 
 ```
 talky_talky/
-├── server.py             # MCP server entry point
+├── server/               # MCP server package
+│   ├── app.py            # Server entry point with MCP tools
+│   └── config.py         # Configuration utilities
 ├── tools/
-│   ├── audio.py          # Audio utilities
+│   ├── audio/            # Audio utilities package
+│   │   ├── types.py      # Dataclasses (AudioInfo, results, etc.)
+│   │   ├── utilities.py  # Core functions (convert, concatenate, normalize)
+│   │   ├── trimming.py   # Trim, silence detection, crossfade
+│   │   ├── design.py     # Mix, volume, fade, effects, overlay
+│   │   └── modulation.py # Pitch shift, time stretch, voice effects, formant
 │   ├── tts/              # TTS engines (base.py, utils.py, maya1.py, ...)
-│   ├── songgen/          # Song generation (base.py, levo.py)
+│   ├── songgen/          # Song generation (base.py, levo.py, acestep.py)
 │   ├── transcription/    # STT engines (whisper.py, faster_whisper.py)
-│   ├── analysis/         # Analysis engines (emotion2vec.py, resemblyzer.py, nisqa.py)
-│   └── assets/           # Asset management (database.py, local.py, freesound.py)
+│   ├── analysis/         # Analysis engines (emotion2vec.py, resemblyzer.py, nisqa.py, sfx.py)
+│   ├── assets/           # Asset management (database.py, local.py, freesound.py)
+│   ├── autotune.py       # Vocal autotune
+│   ├── pitch_detection.py # Pitch detection utilities
+│   └── music_theory.py   # Scales and keys constants
 └── utils/
-    └── ffmpeg.py         # ffmpeg wrapper
+    └── ffmpeg/           # ffmpeg wrapper package
+        ├── core.py       # Base utilities (check_available, get_audio_info)
+        ├── format.py     # Format conversion, normalization
+        ├── concat.py     # Concatenation, crossfade join
+        └── manipulation.py # Trim, silence, effects
 ```
 
 ### Engine Architecture
@@ -108,7 +122,7 @@ See [docs/adding-engines.md](docs/adding-engines.md) for the complete guide. Key
 
 1. Create `talky_talky/tools/tts/<engine>.py` extending base class
 2. Register in `__init__.py`
-3. Add MCP tool in `server.py`
+3. Add MCP tool in `server/app.py`
 4. Add dependencies to `pyproject.toml`
 5. Run `uv lock`
 
