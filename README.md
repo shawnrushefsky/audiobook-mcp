@@ -54,6 +54,7 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engine
 - [Available Tools](#available-tools)
   - [TTS Engine Tools](#tts-engine-tools)
   - [Speech Generation Tools](#speech-generation-tools)
+  - [Song Generation Tools](#song-generation-tools)
   - [Transcription Tools](#transcription-tools)
   - [Audio Analysis Tools](#audio-analysis-tools)
   - [Audio Design Tools](#audio-design-tools)
@@ -84,6 +85,13 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engine
 | **VibeVoice Long-form** | Multi-speaker up to 90 min | EN/ZH | MIT |
 | **CosyVoice3** | Instruction-controlled cloning | 9 | Apache-2.0 |
 | **SeamlessM4T v2** | Translation + TTS, 200 speakers | 35 | CC-BY-NC-4.0 |
+
+### Song Generation (2 Engines)
+
+| Engine | Description | Platform | License |
+|--------|-------------|----------|---------|
+| **LeVo** | Complete songs from lyrics with vocals | CUDA | MIT |
+| **ACE-Step** | Foundation model, style prompts + lyrics | CUDA/MPS | MIT |
 
 ### Speech-to-Text (2 Engines)
 
@@ -198,6 +206,9 @@ pip install -e ".[emotion2vec]"     # Emotion detection
 pip install -e ".[resemblyzer]"     # Voice similarity
 pip install -e ".[nisqa]"           # Speech quality
 
+# Song Generation (CUDA required for LeVo)
+pip install -e ".[songgen]"         # LeVo + ACE-Step
+
 # Combined
 pip install -e ".[tts]"             # All TTS engines
 pip install -e ".[transcription]"   # All transcription engines
@@ -288,6 +299,21 @@ Add to `.mcp.json` or `~/.claude/settings.json`:
 | `speak_vibevoice_longform` | Long-form multi-speaker |
 | `speak_cosyvoice` | Instruction-controlled cloning |
 | `speak_seamlessm4t` | Multilingual TTS + translation |
+
+### Song Generation Tools
+
+| Tool | Description |
+|------|-------------|
+| `check_songgen_availability` | Check song generation engine status |
+| `get_songgen_engines_info` | Get engine details and requirements |
+| `list_available_songgen_engines` | List installed engines |
+| `get_songgen_model_status` | Check LeVo model download status |
+| `download_songgen_models` | Download LeVo models (~10GB) |
+| `get_songgen_lyrics_format` | Get lyrics format guide |
+| `generate_song_levo` | Generate songs from lyrics (CUDA) |
+| `get_acestep_model_status` | Check ACE-Step model status |
+| `download_acestep_models` | Download ACE-Step models (~7GB) |
+| `generate_song_acestep` | Generate songs with ACE-Step (MPS/CUDA) |
 
 ### Transcription Tools
 
@@ -534,6 +560,24 @@ Use SeamlessM4T to translate "Hello, how are you?" from English to Japanese spee
 4. Create a chipmunk version by pitching up 6 semitones
 ```
 
+### Generate a Song
+
+```
+Generate a pop song with LeVo using these lyrics:
+[intro-short] ; [verse] Walking through the city lights. Stars are shining bright tonight ;
+[chorus] This is our moment. Nothing can stop us now ; [outro-short]
+
+Use description: "female, pop, upbeat, synth"
+```
+
+### Generate Music with ACE-Step (Apple Silicon)
+
+```
+Generate an instrumental jazz track with ACE-Step:
+- Style prompt: "instrumental, jazz, piano, smooth, relaxing"
+- Duration: 60 seconds
+```
+
 
 ## Development
 
@@ -556,9 +600,9 @@ This project uses `uv` for package management.
 
 MIT
 
-Individual TTS engines have their own licenses:
+Individual engines have their own licenses:
 - **Apache-2.0**: Maya1, Kokoro, Soprano, CosyVoice3
-- **MIT**: Chatterbox, MiraTTS, VibeVoice
+- **MIT**: Chatterbox, MiraTTS, VibeVoice, LeVo, ACE-Step
 - **CPML**: XTTS-v2 (Coqui Public Model License)
 - **CC-BY-NC-4.0**: SeamlessM4T v2 (non-commercial only)
 
