@@ -90,6 +90,21 @@ All voice modulation tools preserve the original sample rate of the input file.
 - `telephone`: 0.5-0.7 for realistic phone call
 - `chorus`: 0.3-0.5 for ensemble effect without muddiness
 
+## Autotune Tools
+
+| Tool | Description |
+|------|-------------|
+| `autotune_vocals` | Apply pitch correction to vocals in specified key/scale |
+| `detect_vocal_pitch` | Analyze pitch content of audio (pitch range, notes, etc.) |
+| `list_autotune_scales` | List available musical scales (major, minor, blues, etc.) |
+| `list_autotune_keys` | List available musical keys (C, C#, D, etc.) |
+
+**Autotune Parameters:**
+- `key`: Musical key (C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B)
+- `scale`: Scale type (major, minor, blues, pentatonic, modes, etc.)
+- `correction_strength`: 0.0 (off) to 1.0 (full T-Pain effect)
+- `speed`: 0.01 (slow natural glide) to 1.0 (instant robotic snap)
+
 ## Transcription Tools
 
 | Tool | Description |

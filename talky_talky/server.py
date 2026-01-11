@@ -76,6 +76,14 @@ from .tools.audio import (
     VOICE_EFFECTS,
 )
 
+# Import autotune module
+from .tools.autotune import (
+    autotune as autotune_audio,
+    detect_pitch as detect_audio_pitch,
+    list_keys as get_autotune_keys,
+    list_scales as get_autotune_scales,
+)
+
 # Import transcription module
 from .tools.transcription import (
     check_transcription,
@@ -2112,6 +2120,187 @@ def shift_voice_formant(
         shift_ratio=shift_ratio,
     )
     return to_dict(result)
+
+
+# ============================================================================
+# Autotune Tools
+# ============================================================================
+
+
+@mcp.tool()
+def autotune_vocals(
+    input_path: str,
+    output_path: Optional[str] = None,
+    key: str = "C",
+    scale: str = "major",
+    correction_strength: float = 1.0,
+    speed: float = 1.0,
+) -> dict:
+    """Apply autotune (pitch correction) to vocals.
+
+    Uses pyworld WORLD vocoder for high-quality pitch correction.
+    Detects pitch frame-by-frame and corrects to the nearest note
+    in the specified key and scale.
+
+    Args:
+        input_path: Path to the input audio file (vocals/singing).
+        output_path: Optional output path. If not provided, creates a file
+            with '_autotuned' suffix in the same directory.
+        key: Musical key/root note. Options:
+            C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B
+        scale: Scale type. Options:
+            - "major" / "ionian": Major scale (default)
+            - "minor" / "aeolian": Natural minor scale
+            - "harmonic_minor": Harmonic minor scale
+            - "melodic_minor": Melodic minor scale
+            - "dorian", "phrygian", "lydian", "mixolydian", "locrian": Modes
+            - "major_pentatonic", "minor_pentatonic": Pentatonic scales
+            - "blues": Blues scale
+            - "chromatic": All 12 notes (subtle correction only)
+        correction_strength: How strongly to correct pitch (0.0-1.0).
+            0.0 = no correction (bypass)
+            0.5 = subtle, natural correction
+            1.0 = full "T-Pain" style hard correction (default)
+        speed: How quickly to snap to the correct pitch (0.01-1.0).
+            1.0 = instant snap (robotic effect, default)
+            0.5 = medium speed (more natural)
+            0.1 = slow glide (very natural, subtle)
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Autotuned file path
+        - duration_ms: Duration of output
+        - key: Key used
+        - scale: Scale used
+        - correction_strength: Strength applied
+        - speed: Speed applied
+        - frames_corrected: Number of frames that were pitch-corrected
+        - total_voiced_frames: Total voiced frames in audio
+        - average_correction_cents: Average pitch correction in cents
+        - max_correction_cents: Maximum pitch correction in cents
+
+    Example:
+        # Classic "T-Pain" hard autotune in A minor
+        result = autotune_vocals("vocals.wav", key="A", scale="minor")
+
+        # Subtle pitch correction in C major
+        result = autotune_vocals("vocals.wav", key="C", scale="major",
+                                 correction_strength=0.5)
+
+        # Natural-sounding correction with slow glide
+        result = autotune_vocals("vocals.wav", key="G", scale="major",
+                                 correction_strength=0.8, speed=0.3)
+
+        # Blues scale autotune
+        result = autotune_vocals("vocals.wav", key="E", scale="blues")
+
+    Note:
+        Requires pyworld: pip install pyworld
+        For best results, use clean vocal recordings without background music.
+    """
+    result = autotune_audio(
+        input_path=input_path,
+        output_path=output_path,
+        key=key,
+        scale=scale,
+        correction_strength=correction_strength,
+        speed=speed,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def detect_vocal_pitch(
+    input_path: str,
+    method: str = "harvest",
+    frame_period_ms: float = 5.0,
+) -> dict:
+    """Detect pitch (fundamental frequency) in an audio file.
+
+    Analyzes vocals to extract pitch information frame-by-frame.
+    Useful for understanding the pitch content before autotuning
+    or for analyzing singing performance.
+
+    Args:
+        input_path: Path to the audio file to analyze.
+        method: Pitch detection algorithm.
+            "harvest" - High quality, slower (default, recommended)
+            "dio" - Faster, slightly less accurate
+        frame_period_ms: Analysis frame period in milliseconds (default 5.0).
+            Lower values = more detailed analysis but larger output.
+
+    Returns:
+        Dict with:
+        - input_path: Analyzed file path
+        - duration_ms: Audio duration
+        - sample_rate: Audio sample rate
+        - frame_count: Number of analysis frames
+        - frame_period_ms: Frame period used
+        - voiced_frames: Frames with detected pitch
+        - unvoiced_frames: Frames without pitch (silence/noise)
+        - pitch_range_hz: Tuple of (min, max) detected frequencies
+        - average_pitch_hz: Mean pitch frequency
+        - median_pitch_hz: Median pitch frequency
+        - detected_notes: List of (note_name, frequency, count) for top notes
+
+    Example:
+        # Analyze a vocal recording
+        result = detect_vocal_pitch("singing.wav")
+        print(f"Pitch range: {result['pitch_range_hz']}")
+        print(f"Most common notes: {result['detected_notes']}")
+
+        # Faster analysis with dio
+        result = detect_vocal_pitch("vocals.wav", method="dio")
+
+    Note:
+        Requires pyworld: pip install pyworld
+    """
+    result = detect_audio_pitch(
+        input_path=input_path,
+        method=method,
+        frame_period_ms=frame_period_ms,
+    )
+    return to_dict(result)
+
+
+@mcp.tool()
+def list_autotune_scales() -> dict:
+    """List all available musical scales for autotune.
+
+    Returns all supported scales with their semitone intervals from the root.
+    Use these scale names with the autotune_vocals tool.
+
+    Returns:
+        Dict with:
+        - scales: Dict mapping scale names to semitone intervals
+          Example: {"major": [0, 2, 4, 5, 7, 9, 11], ...}
+
+    Scale categories:
+    - Major modes: major/ionian, dorian, phrygian, lydian, mixolydian, aeolian, locrian
+    - Minor scales: minor, harmonic_minor, melodic_minor
+    - Pentatonic: major_pentatonic, minor_pentatonic
+    - Blues: blues
+    - Chromatic: chromatic (all 12 notes)
+    """
+    return {"scales": get_autotune_scales()}
+
+
+@mcp.tool()
+def list_autotune_keys() -> dict:
+    """List all available musical keys for autotune.
+
+    Returns all supported key/root note names.
+    Use these key names with the autotune_vocals tool.
+
+    Returns:
+        Dict with:
+        - keys: List of key names (C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B)
+
+    Note:
+        Enharmonic equivalents are supported (C# = Db, D# = Eb, etc.)
+    """
+    return {"keys": get_autotune_keys()}
 
 
 # ============================================================================

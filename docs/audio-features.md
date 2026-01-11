@@ -159,6 +159,67 @@ result = shift_formant("female.wav", "masculine.wav", shift_ratio=0.85)
 - Best quality: `pyworld>=0.3.0` (WORLD vocoder)
 - Fallback: `librosa>=0.10.0` (approximation)
 
+### Autotune / Pitch Correction
+
+Apply automatic pitch correction to vocals. Supports multiple musical scales and correction intensities, from subtle natural correction to hard "T-Pain" style effects.
+
+```python
+from talky_talky.tools.autotune import autotune, detect_pitch
+
+# Classic "T-Pain" hard autotune in A minor
+result = autotune("vocals.wav", "autotuned.wav", key="A", scale="minor")
+
+# Subtle pitch correction in C major
+result = autotune("vocals.wav", key="C", scale="major", correction_strength=0.5)
+
+# Natural-sounding correction with slow glide
+result = autotune("vocals.wav", key="G", scale="major",
+                  correction_strength=0.8, speed=0.3)
+
+# Blues scale autotune
+result = autotune("vocals.wav", key="E", scale="blues")
+
+# Analyze pitch before autotuning
+pitch_info = detect_pitch("vocals.wav")
+print(f"Pitch range: {pitch_info.pitch_range_hz}")
+print(f"Most common notes: {pitch_info.detected_notes}")
+```
+
+**Parameters:**
+
+| Parameter | Description | Range |
+|-----------|-------------|-------|
+| `key` | Musical key/root note | C, C#, D, D#, E, F, F#, G, G#, A, A#, B (also Db, Eb, Gb, Ab, Bb) |
+| `scale` | Scale type | See table below |
+| `correction_strength` | How strongly to correct | 0.0 (off) to 1.0 (full snap) |
+| `speed` | How quickly to snap to pitch | 0.01 (slow glide) to 1.0 (instant) |
+
+**Available Scales:**
+
+| Scale | Intervals | Use Case |
+|-------|-----------|----------|
+| `major` / `ionian` | 0, 2, 4, 5, 7, 9, 11 | Pop, rock, country |
+| `minor` / `aeolian` | 0, 2, 3, 5, 7, 8, 10 | Pop, rock, R&B |
+| `harmonic_minor` | 0, 2, 3, 5, 7, 8, 11 | Classical, metal |
+| `melodic_minor` | 0, 2, 3, 5, 7, 9, 11 | Jazz |
+| `dorian` | 0, 2, 3, 5, 7, 9, 10 | Jazz, funk |
+| `mixolydian` | 0, 2, 4, 5, 7, 9, 10 | Rock, blues |
+| `major_pentatonic` | 0, 2, 4, 7, 9 | Pop, country, folk |
+| `minor_pentatonic` | 0, 3, 5, 7, 10 | Rock, blues |
+| `blues` | 0, 3, 5, 6, 7, 10 | Blues, rock |
+| `chromatic` | All 12 notes | Subtle correction only |
+
+**Correction Styles:**
+
+| Style | `correction_strength` | `speed` | Effect |
+|-------|----------------------|---------|--------|
+| Hard/T-Pain | 1.0 | 1.0 | Robotic, obvious autotune |
+| Medium | 0.7 | 0.5 | Noticeable but musical |
+| Natural | 0.5 | 0.3 | Subtle, professional |
+| Gentle | 0.3 | 0.1 | Very subtle, barely noticeable |
+
+**Requirements:** `pyworld>=0.3.0` (included in voice-modulation extra)
+
 ### Installation
 
 ```bash

@@ -152,9 +152,9 @@ macos-transcription = [
 macos-analysis = [
     "talky-talky[macos,analysis]",
 ]
-# macOS full - all compatible TTS, transcription, and analysis
+# macOS full - all compatible TTS, transcription, analysis, and voice modulation
 macos-full = [
-    "talky-talky[macos,transcription,analysis]",
+    "talky-talky[macos,transcription,analysis,voice-modulation]",
 ]
 # macOS complete - same as macos-full
 # Note: For ACE-Step song generation, use macos-songgen (excludes chatterbox)
@@ -179,9 +179,9 @@ linux-cuda-transcription = [
 linux-cuda-analysis = [
     "talky-talky[linux-cuda,analysis]",
 ]
-# Linux CUDA full - all TTS engines, transcription, and analysis
+# Linux CUDA full - all TTS engines, transcription, analysis, and voice modulation
 linux-cuda-full = [
-    "talky-talky[linux-cuda,transcription,analysis]",
+    "talky-talky[linux-cuda,transcription,analysis,voice-modulation]",
 ]
 # Linux CUDA complete - everything including song generation
 linux-cuda-complete = [
@@ -200,9 +200,9 @@ cpu-transcription = [
 cpu-analysis = [
     "talky-talky[cpu,analysis]",
 ]
-# CPU full - all compatible TTS, transcription, and analysis
+# CPU full - all compatible TTS, transcription, analysis, and voice modulation
 cpu-full = [
-    "talky-talky[cpu,transcription,analysis]",
+    "talky-talky[cpu,transcription,analysis,voice-modulation]",
 ]
 # Emotion detection (emotion2vec via FunASR)
 emotion2vec = [
