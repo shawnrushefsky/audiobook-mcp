@@ -543,6 +543,7 @@ print(result)
 - `download_audio_asset` - Download remote asset to local storage
 - `import_audio_folder` - Import local audio folder into asset library
 - `configure_freesound_api` - Configure Freesound.org API key
+- `configure_jamendo_api` - Configure Jamendo client ID for music
 - `set_audio_library_path` - Set custom library storage path
 - `get_audio_library_path` - Get current library path
 - `add_asset_tags` - Add tags to an asset
@@ -1123,6 +1124,14 @@ The asset management system provides unified access to sound effects, music, and
 - **Important:** Use the "Client secret/Api key" as the API token (NOT the "Client id")
 - Token authentication (no OAuth required for basic access)
 - Downloads high-quality MP3 previews (full quality requires OAuth2)
+
+**Jamendo Source:**
+- Platform for independent Creative Commons music with 500k+ tracks
+- Requires client ID from https://developer.jamendo.com/v3.0
+- Free for non-commercial use (contact Jamendo for commercial licensing)
+- Full track downloads in MP3 format
+- Search by genre, mood, tempo, vocal/instrumental
+- Supports artist and album browsing
 
 ### Asset Types
 

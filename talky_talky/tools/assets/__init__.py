@@ -53,6 +53,7 @@ from .database import (
 )
 from .local import get_local_source, LocalSource
 from .freesound import get_freesound_source, FreesoundSource
+from .jamendo import get_jamendo_source, JamendoSource
 from .autotag import (
     auto_tag_audio,
     get_autotag_capabilities,
@@ -73,8 +74,10 @@ __all__ = [
     # Sources
     "LocalSource",
     "FreesoundSource",
+    "JamendoSource",
     "get_local_source",
     "get_freesound_source",
+    "get_jamendo_source",
     # High-level API
     "search_assets",
     "get_asset",
@@ -82,6 +85,7 @@ __all__ = [
     "import_folder",
     "list_sources",
     "configure_freesound",
+    "configure_jamendo",
     "set_asset_library_path",
     "get_asset_library_path",
     # Tag management
@@ -110,6 +114,7 @@ def _init_sources() -> None:
     if not _sources:
         _sources["local"] = get_local_source()
         _sources["freesound"] = get_freesound_source()
+        _sources["jamendo"] = get_jamendo_source()
 
 
 def list_sources() -> dict[str, AssetSourceInfo]:
@@ -184,6 +189,31 @@ def configure_freesound(api_key: str) -> dict:
     return {
         "status": "success",
         "source": "freesound",
+        "configured": source.is_api_key_configured(),
+    }
+
+
+def configure_jamendo(client_id: str) -> dict:
+    """Configure Jamendo client ID.
+
+    To get a client ID:
+    1. Create account at https://www.jamendo.com
+    2. Register app at https://developer.jamendo.com/v3.0
+
+    Note: Free for non-commercial use. Contact Jamendo for commercial licensing.
+
+    Args:
+        client_id: Your Jamendo client ID
+
+    Returns:
+        Dict with configuration status
+    """
+    source = get_jamendo_source()
+    source.configure_api_key(client_id)
+
+    return {
+        "status": "success",
+        "source": "jamendo",
         "configured": source.is_api_key_configured(),
     }
 
@@ -400,6 +430,9 @@ async def download_asset(
                 ext = "ogg"
             else:
                 ext = "mp3"  # Default for Freesound previews
+        elif asset.source == "jamendo":
+            # Jamendo defaults to MP3
+            ext = "mp3"
         else:
             # Use original format or default to mp3
             ext = asset.format or "mp3"

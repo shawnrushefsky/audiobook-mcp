@@ -129,6 +129,7 @@ Requirements: Python 3.11+, ffmpeg, GPU recommended for TTS/transcription engine
 
 - **Local Library**: Index and search local folders with SQLite FTS5
 - **Freesound.org**: Search and download CC-licensed sounds
+- **Jamendo**: 500k+ CC-licensed music tracks for free (non-commercial)
 - **License Tracking**: CC0, CC-BY, CC-BY-NC, CC-BY-SA attribution
 - **Tagging**: Manual and AI-powered auto-tagging
 
@@ -365,12 +366,13 @@ Add to `.mcp.json` or `~/.claude/settings.json`:
 
 | Tool | Description |
 |------|-------------|
-| `list_asset_sources` | List sources (local, Freesound) |
+| `list_asset_sources` | List sources (local, Freesound, Jamendo) |
 | `search_audio_assets` | Search SFX, music, ambience |
 | `get_audio_asset` | Get asset details |
 | `download_audio_asset` | Download to local storage |
 | `import_audio_folder` | Import folder to library |
 | `configure_freesound_api` | Set Freesound API key |
+| `configure_jamendo_api` | Set Jamendo client ID for music |
 | `add_asset_tags` | Add tags to asset |
 | `remove_asset_tags` | Remove tags from asset |
 | `list_all_asset_tags` | List all tags with counts |

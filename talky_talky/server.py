@@ -110,6 +110,7 @@ from .tools.assets import (
     import_folder as import_folder_async,
     list_sources,
     configure_freesound,
+    configure_jamendo,
     set_asset_library_path,
     get_asset_library_path,
     add_tags,
@@ -2762,6 +2763,28 @@ def configure_freesound_api(api_key: str) -> dict:
         Dict with configuration status.
     """
     return configure_freesound(api_key)
+
+
+@mcp.tool()
+def configure_jamendo_api(client_id: str) -> dict:
+    """Configure the Jamendo client ID for searching and downloading music.
+
+    Jamendo is a platform for independent Creative Commons licensed music with 500k+ tracks.
+    To get a client ID:
+    1. Create a free account at https://www.jamendo.com
+    2. Register your app at https://developer.jamendo.com/v3.0
+
+    Note: The API is free for non-commercial use. For commercial use, contact Jamendo.
+
+    The client ID is stored persistently in the asset library database.
+
+    Args:
+        client_id: Your Jamendo client ID from app registration.
+
+    Returns:
+        Dict with configuration status.
+    """
+    return configure_jamendo(client_id)
 
 
 @mcp.tool()

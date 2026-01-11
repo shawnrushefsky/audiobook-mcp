@@ -129,7 +129,7 @@ class Asset:
     @property
     def is_remote(self) -> bool:
         """Check if asset is from a remote source."""
-        return self.source in ("pixabay", "freesound")
+        return self.source in ("pixabay", "freesound", "jamendo")
 
     @property
     def duration_secs(self) -> float:
