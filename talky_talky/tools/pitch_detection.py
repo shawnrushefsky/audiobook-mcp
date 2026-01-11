@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .music_theory import NOTE_NAMES, freq_to_midi, freq_to_note, midi_to_freq
+from .music_theory import NOTE_NAMES, freq_to_note, midi_to_freq
 
 
 @dataclass

@@ -5256,6 +5256,7 @@ cpu-transcription = [
     { name = "tts" },
 ]
 dev = [
+    { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -5604,6 +5605,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'chatterbox'", specifier = "<2.4" },
     { name = "onnx", marker = "extra == 'chatterbox'", specifier = "==1.16.0" },
     { name = "onnxruntime", marker = "extra == 'mira'", specifier = ">=1.15.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pydub", specifier = ">=0.25.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },

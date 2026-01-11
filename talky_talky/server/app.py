@@ -30,15 +30,13 @@ Plus audio utilities for format conversion and concatenation.
 
 import subprocess
 import sys
+from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 # Import configuration utilities
 from .config import (
-    VERSION,
-    CONFIG_DIR,
-    CONFIG_FILE,
     DEFAULT_OUTPUT_DIR,
     _load_config,
     _save_config,
