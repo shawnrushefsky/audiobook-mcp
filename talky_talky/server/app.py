@@ -52,6 +52,7 @@ from ..tools.tts import (
     get_available_engines,
     list_engines,
     generate,
+    batch_generate,
 )
 from ..tools.tts.maya1 import (
     check_models_downloaded as check_maya1_models,
@@ -68,6 +69,7 @@ from ..tools.audio import (
     validate_audio_compatibility,
     is_ffmpeg_available,
     trim_audio,
+    batch_trim_audio,
     batch_detect_silence,
     insert_silence,
     crossfade_join,
@@ -82,6 +84,10 @@ from ..tools.audio import (
     apply_voice_effect,
     shift_formant,
     VOICE_EFFECTS,
+    # Batch and new utilities
+    batch_normalize_audio,
+    generate_silence,
+    loop_audio_to_duration,
 )
 
 # Import autotune module
@@ -118,6 +124,15 @@ from ..tools.analysis import (
     detect_silence,
     validate_format,
     get_sfx_analysis_info,
+    # TTS verification
+    detect_spoken_tags,
+    compare_audio_to_text,
+    convert_tags_for_engine,
+    # Speech boundary detection
+    detect_speech_onset,
+    detect_truncated_audio,
+    verify_segment_boundaries,
+    trim_to_speech_with_padding,
 )
 
 # Import song generation module
@@ -1106,7 +1121,7 @@ def join_audio_files(
     output_path: str,
     output_format: str = "wav",
     gap_ms: float | list[float] = 0,
-    resample: bool = False,
+    resample: bool = True,
     target_sample_rate: Optional[int] = None,
 ) -> dict:
     """Concatenate multiple audio files into one.
@@ -1121,8 +1136,9 @@ def join_audio_files(
               List length must be len(audio_paths) - 1
             Default: 0 (no gaps).
             Typical values: 300-400ms between dialogue, 800ms+ for scene breaks.
-        resample: If True, resample all files to a common sample rate before joining.
-            This prevents static/noise artifacts from sample rate mismatches.
+        resample: If True (default), resample all files to a common sample rate
+            before joining. This prevents static/noise artifacts from sample rate
+            mismatches. Set to False only if you're certain all files match.
         target_sample_rate: Target sample rate when resample=True. If None, uses
             the sample rate of the first file.
 
@@ -1130,12 +1146,7 @@ def join_audio_files(
         Dict with output_path, input_count, total_duration_ms, and output_format.
 
     Raises:
-        ValueError: If sample rate mismatch detected without resample=True.
-
-    Note:
-        If you encounter static/noise artifacts when joining TTS output with
-        voice-effected audio, use resample=True or call validate_audio_compatibility()
-        first to check for sample rate mismatches.
+        ValueError: If sample rate mismatch detected with resample=False.
     """
     result = concatenate_audio(
         audio_paths=audio_paths,
@@ -1461,6 +1472,210 @@ def batch_analyze_silence(
 
 
 @mcp.tool()
+def batch_trim_audio_files(
+    audio_paths: list[str],
+    output_dir: Optional[str] = None,
+    padding_ms: float = 50,
+    suffix: str = "_trimmed",
+) -> dict:
+    """Trim multiple audio files to content boundaries at once.
+
+    Auto-detects silence at the start and end of each file and trims to content.
+    Much more efficient than calling trim_audio_file individually for large batches.
+
+    Args:
+        audio_paths: List of paths to audio files to trim.
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with the suffix appended.
+        padding_ms: Milliseconds of silence to keep as buffer. Default: 50ms.
+        suffix: Suffix to append to output filenames. Default: "_trimmed".
+
+    Returns:
+        Dict with:
+        - status: "success", "partial", or "error"
+        - total: Total number of files
+        - succeeded: Number successfully trimmed
+        - failed: Number of failures
+        - results: List of results for each file
+
+    Example:
+        result = batch_trim_audio_files([
+            "segment_001.wav",
+            "segment_002.wav",
+            "segment_003.wav",
+        ], output_dir="/path/to/trimmed/", padding_ms=30)
+    """
+    results = batch_trim_audio(
+        audio_paths=audio_paths,
+        output_dir=output_dir,
+        padding_ms=padding_ms,
+        suffix=suffix,
+    )
+    succeeded = sum(1 for r in results if r.get("status") == "success")
+    failed = len(results) - succeeded
+
+    if succeeded == len(results):
+        status = "success"
+    elif succeeded > 0:
+        status = "partial"
+    else:
+        status = "error"
+
+    return {
+        "status": status,
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
+    }
+
+
+@mcp.tool()
+def batch_normalize_audio_files(
+    audio_paths: list[str],
+    output_dir: Optional[str] = None,
+    suffix: str = "_normalized",
+) -> dict:
+    """Normalize multiple audio files to broadcast standard (-16 LUFS) at once.
+
+    Much more efficient than calling normalize_audio_levels individually for large batches.
+
+    Args:
+        audio_paths: List of paths to audio files to normalize.
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with the suffix appended.
+        suffix: Suffix to append to output filenames. Default: "_normalized".
+
+    Returns:
+        Dict with:
+        - status: "success", "partial", or "error"
+        - total: Total number of files
+        - succeeded: Number successfully normalized
+        - failed: Number of failures
+        - results: List of results for each file
+
+    Example:
+        result = batch_normalize_audio_files([
+            "chapter_01.wav",
+            "chapter_02.wav",
+            "chapter_03.wav",
+        ], output_dir="/path/to/normalized/")
+    """
+    results = batch_normalize_audio(
+        audio_paths=audio_paths,
+        output_dir=output_dir,
+        suffix=suffix,
+    )
+    succeeded = sum(1 for r in results if r.get("status") == "success")
+    failed = len(results) - succeeded
+
+    if succeeded == len(results):
+        status = "success"
+    elif succeeded > 0:
+        status = "partial"
+    else:
+        status = "error"
+
+    return {
+        "status": status,
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
+    }
+
+
+@mcp.tool()
+def generate_silence_audio(
+    output_path: str,
+    duration_ms: float,
+    sample_rate: int = 44100,
+    channels: int = 2,
+) -> dict:
+    """Generate a silent audio file of specified duration.
+
+    Creates a pure silence audio file without requiring any input audio.
+    Useful for creating gaps, pauses, or placeholder audio.
+
+    Args:
+        output_path: Where to save the generated audio. Can be a full path or just
+            a filename (e.g., "silence.wav") which will be saved to the configured
+            output directory.
+        duration_ms: Duration of silence in milliseconds.
+        sample_rate: Sample rate in Hz. Default: 44100.
+        channels: Number of audio channels (1=mono, 2=stereo). Default: 2.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - output_path: Path to the generated file
+        - duration_ms: Duration of the output
+        - sample_rate: Sample rate used
+        - channels: Number of channels
+
+    Example:
+        # Create 2 seconds of stereo silence
+        result = generate_silence_audio("pause.wav", duration_ms=2000)
+
+        # Create 500ms mono silence at 24kHz (to match TTS output)
+        result = generate_silence_audio("gap.wav", duration_ms=500, sample_rate=24000, channels=1)
+    """
+    return generate_silence(
+        output_path=resolve_output_path(output_path),
+        duration_ms=duration_ms,
+        sample_rate=sample_rate,
+        channels=channels,
+    )
+
+
+@mcp.tool()
+def loop_audio_to_target_duration(
+    input_path: str,
+    target_duration_ms: float,
+    output_path: Optional[str] = None,
+    crossfade_ms: float = 0,
+) -> dict:
+    """Loop a short audio file to reach a target duration.
+
+    Repeats the audio as many times as needed to reach or exceed the target duration,
+    then trims to exactly the target length. Useful for looping ambient sounds or
+    background music to match chapter/scene length.
+
+    Args:
+        input_path: Path to the input audio file to loop.
+        target_duration_ms: Target duration in milliseconds.
+        output_path: Optional output path. If not provided, creates a file
+            with '_looped' suffix.
+        crossfade_ms: Optional crossfade between loops in milliseconds. Default: 0.
+            Use 50-200ms for smoother loop transitions.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - input_path: Original file path
+        - output_path: Looped file path
+        - original_duration_ms: Original file duration
+        - target_duration_ms: Requested target duration
+        - actual_duration_ms: Actual output duration
+        - loop_count: Number of times the audio was looped
+
+    Example:
+        # Loop 30-second ambient to match 10-minute chapter
+        result = loop_audio_to_target_duration(
+            "forest_ambience.wav",
+            target_duration_ms=600000,  # 10 minutes
+            crossfade_ms=100
+        )
+    """
+    return loop_audio_to_duration(
+        input_path=input_path,
+        output_path=output_path,
+        target_duration_ms=target_duration_ms,
+        crossfade_ms=crossfade_ms,
+    )
+
+
+@mcp.tool()
 def insert_audio_silence(
     input_path: str,
     output_path: Optional[str] = None,
@@ -1510,6 +1725,8 @@ def crossfade_join_audio(
     output_path: str,
     crossfade_ms: float = 50,
     output_format: str = "wav",
+    resample: bool = True,
+    target_sample_rate: Optional[int] = None,
 ) -> dict:
     """Concatenate audio files with smooth crossfade transitions.
 
@@ -1525,6 +1742,11 @@ def crossfade_join_audio(
             - 50-100ms: Noticeable, good for scene transitions
             - 100-200ms: Smooth, good for music transitions
         output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'wav'.
+        resample: If True (default), resample all files to a common sample rate
+            before joining. This prevents static/noise artifacts from sample rate
+            mismatches. Set to False only if you're certain all files match.
+        target_sample_rate: Target sample rate when resample=True. If None, uses
+            the sample rate of the first file.
 
     Returns:
         Dict with:
@@ -1547,6 +1769,8 @@ def crossfade_join_audio(
         output_path=output_path,
         crossfade_ms=crossfade_ms,
         output_format=output_format,
+        resample=resample,
+        target_sample_rate=target_sample_rate,
     )
     return to_dict(result)
 
@@ -2917,6 +3141,420 @@ def verify_tts_comprehensive(
         }
 
     return results
+
+
+@mcp.tool()
+def detect_spoken_tts_tags(
+    audio_path: str,
+    tags: Optional[list[str]] = None,
+    tts_engine: Optional[str] = None,
+    engine: str = "faster_whisper",
+    model_size: str = "base",
+) -> dict:
+    """Detect if TTS spoke tags as words instead of performing them.
+
+    Checks if TTS engines incorrectly spoke tags like "[chuckle]" or "<laugh>"
+    as literal words instead of performing the intended action. This is a
+    common issue with some TTS engines.
+
+    Args:
+        audio_path: Path to the audio file to analyze.
+        tags: List of tags to check for. If None, uses common defaults.
+        tts_engine: Optional TTS engine used to generate the audio. If provided,
+            returns suggestions for correctly formatted tags for that engine.
+        engine: Transcription engine to use (default: "faster_whisper").
+        model_size: Whisper model size (default: "base" for speed).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - has_spoken_tags: True if tags were spoken as words
+        - spoken_tags: List of tags that were spoken as words
+        - transcription: Full transcribed text
+        - confidence: Overall detection confidence (0-1)
+        - suggested_fixes: Dict mapping spoken tags to correct format (if tts_engine provided)
+
+    Example:
+        result = detect_spoken_tts_tags("tts_output.wav", tts_engine="maya1")
+        if result["has_spoken_tags"]:
+            print(f"TTS spoke these tags: {result['spoken_tags']}")
+            if result.get("suggested_fixes"):
+                print(f"Use these instead: {result['suggested_fixes']}")
+    """
+    return detect_spoken_tags(
+        audio_path=audio_path,
+        tags=tags,
+        tts_engine=tts_engine,
+        engine=engine,
+        model_size=model_size,
+    )
+
+
+@mcp.tool()
+def quick_compare_audio_to_text(
+    audio_path: str,
+    expected_text: str,
+    engine: str = "faster_whisper",
+    model_size: str = "base",
+    ignore_case: bool = True,
+    ignore_punctuation: bool = True,
+) -> dict:
+    """Quick comparison of audio content to expected text.
+
+    A lightweight alternative to verify_tts_output that focuses only on
+    text matching without quality/emotion checks. Faster for simple
+    "does this audio say what it should?" checks.
+
+    Args:
+        audio_path: Path to the audio file to check.
+        expected_text: The text that should be in the audio.
+        engine: Transcription engine to use (default: "faster_whisper").
+        model_size: Whisper model size (default: "base" for speed).
+        ignore_case: Ignore case differences (default: True).
+        ignore_punctuation: Ignore punctuation differences (default: True).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - matches: True if transcription matches expected text
+        - similarity: Similarity ratio (0.0 to 1.0)
+        - transcribed_text: What was actually transcribed
+        - expected_text: The expected text
+        - differences: List of word-level differences (if any)
+
+    Example:
+        result = quick_compare_audio_to_text(
+            "greeting.wav",
+            "Hello, how are you today?"
+        )
+        if result["matches"]:
+            print("Audio matches expected text!")
+        else:
+            print(f"Similarity: {result['similarity']:.1%}")
+    """
+    return compare_audio_to_text(
+        audio_path=audio_path,
+        expected_text=expected_text,
+        engine=engine,
+        model_size=model_size,
+        ignore_case=ignore_case,
+        ignore_punctuation=ignore_punctuation,
+    )
+
+
+@mcp.tool()
+def convert_tts_tags(
+    text: str,
+    target_engine: str,
+) -> dict:
+    """Convert paralinguistic tags in text to the correct format for a TTS engine.
+
+    Different TTS engines use different tag formats:
+    - Maya1: <tag> (angle brackets)
+    - Chatterbox/Chatterbox Turbo: [tag] (square brackets)
+    - CosyVoice: [breath] (square brackets)
+
+    This function converts tags between formats automatically.
+
+    Args:
+        text: Text containing paralinguistic tags.
+        target_engine: Target TTS engine ID ("maya1", "chatterbox", "chatterbox_turbo", "cosyvoice").
+
+    Returns:
+        Dict with:
+        - converted_text: Text with tags in correct format for the engine
+        - changes_made: List of tag conversions performed
+        - unsupported_tags: List of tags not supported by the target engine
+
+    Example:
+        # Convert Chatterbox-style [laugh] to Maya1-style <laugh>
+        result = convert_tts_tags("Hello [laugh] world", "maya1")
+        # result["converted_text"] = "Hello <laugh> world"
+
+        # Convert Maya1-style <sigh> to Chatterbox-style [sigh]
+        result = convert_tts_tags("Oh <sigh> fine", "chatterbox")
+        # result["converted_text"] = "Oh [sigh] fine"
+    """
+    return convert_tags_for_engine(text=text, target_engine=target_engine)
+
+
+@mcp.tool()
+def batch_generate_tts(
+    segments: list[dict],
+    engine: str = "maya1",
+    output_dir: Optional[str] = None,
+    continue_on_error: bool = True,
+    auto_convert_tags: bool = True,
+    voice_description: Optional[str] = None,
+    reference_audio_paths: Optional[list[str]] = None,
+    exaggeration: float = 0.5,
+    cfg_weight: float = 0.5,
+) -> dict:
+    """Generate audio for multiple text segments at once.
+
+    Processes a manifest of segments and generates audio for each.
+    Much more efficient than calling individual speak_* functions as it
+    keeps the model loaded between segments.
+
+    Args:
+        segments: List of segment dictionaries, each containing:
+            - text: The text to synthesize (required)
+            - output_path: Output filename or path (required)
+            - Any engine-specific overrides (optional)
+        engine: Engine ID to use for all segments (default: "maya1")
+        output_dir: Directory for output files. If segment output_path is just
+            a filename, it will be placed in this directory.
+        continue_on_error: If True, continue with remaining segments if one fails.
+        auto_convert_tags: If True, automatically convert paralinguistic tags to
+            the correct format for the target engine (e.g., [laugh] -> <laugh>).
+        voice_description: For Maya1 - voice description for all segments.
+        reference_audio_paths: For Chatterbox/XTTS - reference audio paths.
+        exaggeration: For Chatterbox - expressiveness (0.0-1.0+).
+        cfg_weight: For Chatterbox - pacing control (0.0-1.0).
+
+    Returns:
+        Dict with:
+        - status: "success", "partial", or "error"
+        - total: Total number of segments
+        - succeeded: Number of successfully generated
+        - failed: Number of failed segments
+        - results: List of result dicts for each segment
+        - failed_segments: List of segment indices that failed
+
+    Example:
+        # Generate a batch of segments for an audiobook
+        segments = [
+            {"text": "Chapter one. The beginning.", "output_path": "chapter_01_001.wav"},
+            {"text": "It was a dark and stormy night.", "output_path": "chapter_01_002.wav"},
+            {"text": "[sigh] Here we go again.", "output_path": "chapter_01_003.wav"},
+        ]
+
+        result = batch_generate_tts(
+            segments=segments,
+            engine="chatterbox",
+            output_dir="/path/to/output/",
+            reference_audio_paths=["/path/to/narrator.wav"],
+            exaggeration=0.6,
+        )
+
+        print(f"Generated {result['succeeded']}/{result['total']} segments")
+    """
+    # Resolve output directory
+    resolved_output_dir = None
+    if output_dir:
+        resolved_output_dir = resolve_output_path(output_dir)
+
+    # Build kwargs based on engine type
+    kwargs = {}
+    if voice_description:
+        kwargs["voice_description"] = voice_description
+    if reference_audio_paths:
+        kwargs["reference_audio_paths"] = reference_audio_paths
+    if engine in ("chatterbox", "chatterbox_turbo"):
+        kwargs["exaggeration"] = exaggeration
+        kwargs["cfg_weight"] = cfg_weight
+
+    return batch_generate(
+        segments=segments,
+        engine=engine,
+        output_dir=resolved_output_dir,
+        continue_on_error=continue_on_error,
+        auto_convert_tags=auto_convert_tags,
+        **kwargs,
+    )
+
+
+# ============================================================================
+# Speech Boundary Detection Tools
+# ============================================================================
+
+
+@mcp.tool()
+def find_speech_onset(
+    audio_path: str,
+    approximate_ms: float,
+    search_window_ms: float = 150,
+    energy_threshold: float = 0.1,
+) -> dict:
+    """Given a rough timestamp, find the precise speech onset using energy detection.
+
+    Analyzes waveform energy to find where voiced audio actually begins within
+    a search window around the approximate timestamp. This is useful for aligning
+    audio to precise timestamps.
+
+    Args:
+        audio_path: Path to the audio file.
+        approximate_ms: Approximate timestamp where speech should start.
+        search_window_ms: Search window size in ms (default: 150ms).
+            Searches ±search_window_ms around approximate_ms.
+        energy_threshold: Energy rise threshold (0-1, default: 0.1).
+            Lower values detect quieter onsets.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - onset_ms: Precise millisecond where voiced audio begins
+        - confidence: Detection confidence (0-1)
+        - search_start_ms: Start of search window
+        - search_end_ms: End of search window
+        - approximate_ms: Original approximate timestamp
+
+    Example:
+        # Find precise onset near 1000ms
+        result = find_speech_onset("speech.wav", approximate_ms=1000, search_window_ms=100)
+        print(f"Actual onset at {result['onset_ms']}ms")
+    """
+    return detect_speech_onset(
+        audio_path=audio_path,
+        approximate_ms=approximate_ms,
+        search_window_ms=search_window_ms,
+        energy_threshold=energy_threshold,
+    )
+
+
+@mcp.tool()
+def check_truncated_audio(
+    audio_path: str,
+    attack_threshold_ms: float = 10,
+    decay_threshold_ms: float = 50,
+) -> dict:
+    """Analyze if audio beginning/end sounds clipped or truncated.
+
+    Detects if audio is missing attack transients at the start or has
+    abrupt cutoffs at the end. This can catch issues like "oday" vs "Today"
+    where the initial consonant was clipped.
+
+    Args:
+        audio_path: Path to the audio file.
+        attack_threshold_ms: Time to reach peak energy from start (default: 10ms).
+            If peak is reached too quickly, may indicate clipped attack.
+        decay_threshold_ms: Minimum decay time at end (default: 50ms).
+            If audio ends too abruptly, may indicate clipped ending.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - is_truncated: True if either start or end appears truncated
+        - start_clipped: True if beginning appears clipped
+        - end_clipped: True if ending appears abruptly cut
+        - attack_time_ms: Time from start to first energy peak
+        - decay_time_ms: Time from last peak to end
+        - start_confidence: Confidence in start clipping detection (0-1)
+        - end_confidence: Confidence in end clipping detection (0-1)
+        - suggestions: List of suggested fixes
+
+    Example:
+        result = check_truncated_audio("segment.wav")
+        if result["is_truncated"]:
+            print("Audio may be clipped!")
+            if result["start_clipped"]:
+                print("- Beginning may be cut off")
+    """
+    return detect_truncated_audio(
+        audio_path=audio_path,
+        attack_threshold_ms=attack_threshold_ms,
+        decay_threshold_ms=decay_threshold_ms,
+    )
+
+
+@mcp.tool()
+def check_segment_boundaries(
+    audio_path: str,
+    expected_text: str,
+    engine: str = "faster_whisper",
+    model_size: str = "base",
+) -> dict:
+    """Transcribe audio and verify it starts/ends cleanly with expected words.
+
+    Checks if the transcription matches the expected text at the boundaries,
+    which can indicate whether the audio was clipped. For example, if expected
+    text is "Today is Monday" but transcription is "oday is Monday", the start
+    is likely clipped.
+
+    Args:
+        audio_path: Path to the audio file.
+        expected_text: The text the audio should contain.
+        engine: Transcription engine (default: "faster_whisper").
+        model_size: Whisper model size (default: "base").
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - boundaries_clean: True if both start and end match expected
+        - start_matches: True if first word matches
+        - end_matches: True if last word matches
+        - expected_first_word: Expected first word
+        - transcribed_first_word: Actual first word
+        - expected_last_word: Expected last word
+        - transcribed_last_word: Actual last word
+        - full_transcription: Full transcribed text
+        - suggestions: List of issues found
+
+    Example:
+        result = check_segment_boundaries("segment.wav", "Today is a beautiful day")
+        if not result["start_matches"]:
+            print(f"Expected '{result['expected_first_word']}' but got '{result['transcribed_first_word']}'")
+    """
+    return verify_segment_boundaries(
+        audio_path=audio_path,
+        expected_text=expected_text,
+        engine=engine,
+        model_size=model_size,
+    )
+
+
+@mcp.tool()
+def smart_trim_to_speech(
+    audio_path: str,
+    output_path: Optional[str] = None,
+    target_start_ms: Optional[float] = None,
+    padding_before_ms: float = 75,
+    padding_after_ms: float = 75,
+    search_window_ms: float = 100,
+) -> dict:
+    """Trim audio to speech boundaries with intelligent padding.
+
+    Instead of trusting timestamps exactly, finds the nearest silence→speech
+    transition and adds configurable padding. This ensures clean cuts that
+    don't clip speech.
+
+    Args:
+        audio_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_smart_trimmed' suffix.
+        target_start_ms: Optional approximate start time. If provided, searches
+            for speech onset near this point. If None, trims from audio start.
+        padding_before_ms: Padding to add before detected speech start (default: 75ms).
+        padding_after_ms: Padding to add after detected speech end (default: 75ms).
+        search_window_ms: Window to search for speech transitions (default: 100ms).
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - input_path: Original file path
+        - output_path: Trimmed file path
+        - detected_start_ms: Where speech was detected to start
+        - detected_end_ms: Where speech was detected to end
+        - actual_start_ms: Trim start point (with padding)
+        - actual_end_ms: Trim end point (with padding)
+        - original_duration_ms: Original file duration
+        - trimmed_duration_ms: New file duration
+
+    Example:
+        # Smart trim with 75ms padding
+        result = smart_trim_to_speech("speech.wav", padding_before_ms=75)
+    """
+    # Resolve output path if provided
+    resolved_output = resolve_output_path(output_path) if output_path else None
+
+    return trim_to_speech_with_padding(
+        audio_path=audio_path,
+        output_path=resolved_output,
+        target_start_ms=target_start_ms,
+        padding_before_ms=padding_before_ms,
+        padding_after_ms=padding_after_ms,
+        search_window_ms=search_window_ms,
+    )
 
 
 # ============================================================================

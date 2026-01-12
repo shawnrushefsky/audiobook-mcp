@@ -142,7 +142,7 @@ def concatenate_audio(
     output_path: str,
     output_format: str = "wav",
     gap_ms: float | list[float] = 0,
-    resample: bool = False,
+    resample: bool = True,
     target_sample_rate: Optional[int] = None,
 ) -> ConcatenateResult:
     """Concatenate multiple audio files into one.
@@ -455,3 +455,291 @@ def is_ffmpeg_available() -> bool:
         True if ffmpeg is available, False otherwise.
     """
     return check_ffmpeg()
+
+
+def batch_normalize_audio(
+    audio_paths: list[str],
+    output_dir: Optional[str] = None,
+    suffix: str = "_normalized",
+) -> list[dict]:
+    """Normalize multiple audio files to broadcast standard (-16 LUFS) at once.
+
+    More efficient than calling normalize_audio individually for large batches.
+
+    Args:
+        audio_paths: List of paths to audio files to normalize.
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with the suffix appended.
+        suffix: Suffix to append to output filenames. Default: "_normalized".
+
+    Returns:
+        List of dicts with results for each file:
+        - path: The input file path
+        - status: "success" or "error"
+        - output_path: Path to normalized file (if success)
+        - duration_ms: Duration of the output
+        - error: Error message (if status is "error")
+
+    Example:
+        results = batch_normalize_audio([
+            "chapter_01.wav",
+            "chapter_02.wav",
+            "chapter_03.wav",
+        ], output_dir="/path/to/normalized/")
+    """
+    results = []
+
+    for input_path in audio_paths:
+        result_dict = {"path": input_path}
+
+        try:
+            input_path_obj = Path(input_path)
+
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                output_path = str(out_dir / f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}")
+            else:
+                output_path = str(
+                    input_path_obj.with_name(
+                        f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}"
+                    )
+                )
+
+            norm_result = normalize_audio(input_path=input_path, output_path=output_path)
+
+            result_dict.update(
+                {
+                    "status": "success",
+                    "output_path": norm_result.output_path,
+                    "duration_ms": norm_result.duration_ms,
+                }
+            )
+
+        except Exception as e:
+            result_dict.update({"status": "error", "error": str(e)})
+
+        results.append(result_dict)
+
+    return results
+
+
+def generate_silence(
+    output_path: str,
+    duration_ms: float,
+    sample_rate: int = 44100,
+    channels: int = 2,
+) -> dict:
+    """Generate a silent audio file of specified duration.
+
+    Creates a pure silence audio file without requiring any input audio.
+    Useful for creating gaps, pauses, or placeholder audio.
+
+    Args:
+        output_path: Path for the output audio file.
+        duration_ms: Duration of silence in milliseconds.
+        sample_rate: Sample rate in Hz. Default: 44100.
+        channels: Number of audio channels (1=mono, 2=stereo). Default: 2.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - output_path: Path to the generated file
+        - duration_ms: Duration of the output
+        - sample_rate: Sample rate used
+        - channels: Number of channels
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        ValueError: If duration_ms is not positive.
+
+    Example:
+        # Create 2 seconds of stereo silence
+        result = generate_silence("pause.wav", duration_ms=2000)
+
+        # Create 500ms mono silence at 24kHz (to match TTS output)
+        result = generate_silence("gap.wav", duration_ms=500, sample_rate=24000, channels=1)
+    """
+    import subprocess
+
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if duration_ms <= 0:
+        raise ValueError("duration_ms must be positive")
+
+    # Create output directory if needed
+    output_path_obj = Path(output_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    duration_secs = duration_ms / 1000
+
+    # Use ffmpeg anullsrc to generate silence
+    channel_layout = "stereo" if channels == 2 else "mono"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"anullsrc=r={sample_rate}:cl={channel_layout}",
+        "-t",
+        str(duration_secs),
+        output_path,
+    ]
+
+    subprocess.run(cmd, capture_output=True, check=True)
+
+    return {
+        "status": "success",
+        "output_path": output_path,
+        "duration_ms": duration_ms,
+        "sample_rate": sample_rate,
+        "channels": channels,
+    }
+
+
+def loop_audio_to_duration(
+    input_path: str,
+    output_path: Optional[str] = None,
+    target_duration_ms: float = 0,
+    crossfade_ms: float = 0,
+) -> dict:
+    """Loop a short audio file to reach a target duration.
+
+    Repeats the audio as many times as needed to reach or exceed the target duration,
+    then trims to exactly the target length. Useful for looping ambient sounds or
+    background music to match chapter/scene length.
+
+    Args:
+        input_path: Path to the input audio file to loop.
+        output_path: Optional output path. If not provided, creates a file
+            with '_looped' suffix.
+        target_duration_ms: Target duration in milliseconds.
+        crossfade_ms: Optional crossfade between loops in milliseconds. Default: 0.
+            Use 50-200ms for smoother loop transitions.
+
+    Returns:
+        Dict with:
+        - status: "success" or "error"
+        - input_path: Original file path
+        - output_path: Looped file path
+        - original_duration_ms: Original file duration
+        - target_duration_ms: Requested target duration
+        - actual_duration_ms: Actual output duration
+        - loop_count: Number of times the audio was looped
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        FileNotFoundError: If input file doesn't exist.
+        ValueError: If target_duration_ms is not positive.
+
+    Example:
+        # Loop 30-second ambient to match 10-minute chapter
+        result = loop_audio_to_duration(
+            "forest_ambience.wav",
+            target_duration_ms=600000,  # 10 minutes
+            crossfade_ms=100
+        )
+    """
+    import subprocess
+    import math
+
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    input_path_obj = Path(input_path)
+    if not input_path_obj.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    if target_duration_ms <= 0:
+        raise ValueError("target_duration_ms must be positive")
+
+    # Determine output path
+    if output_path is None:
+        stem = input_path_obj.stem
+        suffix = input_path_obj.suffix
+        output_path = str(input_path_obj.with_name(f"{stem}_looped{suffix}"))
+
+    # Get original duration
+    original_duration_ms = get_audio_duration(input_path)
+
+    # Calculate how many loops we need
+    loop_count = math.ceil(target_duration_ms / original_duration_ms)
+
+    # Create output directory if needed
+    output_path_obj = Path(output_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    target_duration_secs = target_duration_ms / 1000
+
+    if crossfade_ms > 0 and loop_count > 1:
+        # Use acrossfade filter for smoother transitions
+        # First, create looped audio, then apply crossfade
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Loop the audio
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-stream_loop",
+                str(loop_count - 1),  # -1 because original counts as first
+                "-i",
+                input_path,
+                "-t",
+                str(target_duration_secs),
+                "-c",
+                "copy",
+                tmp_path,
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+
+            # Apply a subtle fade at loop points
+            crossfade_secs = crossfade_ms / 1000
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                tmp_path,
+                "-af",
+                f"afade=t=in:st=0:d={crossfade_secs},afade=t=out:st={target_duration_secs - crossfade_secs}:d={crossfade_secs}",
+                output_path,
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    else:
+        # Simple loop without crossfade
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-stream_loop",
+            str(loop_count - 1),
+            "-i",
+            input_path,
+            "-t",
+            str(target_duration_secs),
+            "-c",
+            "copy",
+            output_path,
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+
+    # Get actual output duration
+    actual_duration_ms = get_audio_duration(output_path)
+
+    return {
+        "status": "success",
+        "input_path": input_path,
+        "output_path": output_path,
+        "original_duration_ms": original_duration_ms,
+        "target_duration_ms": target_duration_ms,
+        "actual_duration_ms": actual_duration_ms,
+        "loop_count": loop_count,
+    }

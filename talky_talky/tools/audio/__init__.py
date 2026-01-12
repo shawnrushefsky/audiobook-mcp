@@ -32,9 +32,13 @@ from .utilities import (
     resample_audio,
     validate_audio_compatibility,
     is_ffmpeg_available,
+    batch_normalize_audio,
+    generate_silence,
+    loop_audio_to_duration,
 )
 from .trimming import (
     trim_audio,
+    batch_trim_audio,
     batch_detect_silence,
     insert_silence,
     crossfade_join,
@@ -82,8 +86,12 @@ __all__ = [
     "resample_audio",
     "validate_audio_compatibility",
     "is_ffmpeg_available",
+    "batch_normalize_audio",
+    "generate_silence",
+    "loop_audio_to_duration",
     # Trimming utilities
     "trim_audio",
+    "batch_trim_audio",
     "batch_detect_silence",
     "insert_silence",
     "crossfade_join",

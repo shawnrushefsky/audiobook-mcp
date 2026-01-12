@@ -7,6 +7,8 @@ from typing import Optional
 from ...utils.ffmpeg import (
     check_ffmpeg,
     get_audio_duration,
+    get_audio_properties,
+    resample_audio as _resample_audio,
     trim_audio_file as _trim_audio,
     insert_silence_file as _insert_silence,
     crossfade_audio_files as _crossfade,
@@ -101,6 +103,88 @@ def trim_audio(
         silence_removed_ms=original_duration - trimmed_duration,
         auto_detected=auto_detected,
     )
+
+
+def batch_trim_audio(
+    audio_paths: list[str],
+    output_dir: Optional[str] = None,
+    padding_ms: float = 50,
+    suffix: str = "_trimmed",
+) -> list[dict]:
+    """Trim multiple audio files to content boundaries at once.
+
+    Auto-detects silence at the start and end of each file and trims to content.
+    More efficient than calling trim_audio individually for large batches.
+
+    Args:
+        audio_paths: List of paths to audio files to trim.
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with the suffix appended.
+        padding_ms: Milliseconds of silence to keep as buffer. Default: 50ms.
+        suffix: Suffix to append to output filenames. Default: "_trimmed".
+
+    Returns:
+        List of dicts with results for each file:
+        - path: The input file path
+        - status: "success" or "error"
+        - output_path: Path to trimmed file (if success)
+        - original_duration_ms: Original duration
+        - trimmed_duration_ms: New duration
+        - silence_removed_ms: Amount of silence removed
+        - error: Error message (if status is "error")
+
+    Example:
+        results = batch_trim_audio([
+            "segment_001.wav",
+            "segment_002.wav",
+            "segment_003.wav",
+        ], output_dir="/path/to/trimmed/", padding_ms=30)
+    """
+    results = []
+
+    for input_path in audio_paths:
+        result_dict = {"path": input_path}
+
+        try:
+            # Determine output path
+            input_path_obj = Path(input_path)
+
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                output_path = str(out_dir / f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}")
+            else:
+                output_path = str(
+                    input_path_obj.with_name(
+                        f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}"
+                    )
+                )
+
+            # Trim the audio (auto-detect mode)
+            trim_result = trim_audio(
+                input_path=input_path,
+                output_path=output_path,
+                start_ms=None,  # Auto-detect
+                end_ms=None,  # Auto-detect
+                padding_ms=padding_ms,
+            )
+
+            result_dict.update(
+                {
+                    "status": "success",
+                    "output_path": trim_result.output_path,
+                    "original_duration_ms": trim_result.original_duration_ms,
+                    "trimmed_duration_ms": trim_result.trimmed_duration_ms,
+                    "silence_removed_ms": trim_result.silence_removed_ms,
+                }
+            )
+
+        except Exception as e:
+            result_dict.update({"status": "error", "error": str(e)})
+
+        results.append(result_dict)
+
+    return results
 
 
 def batch_detect_silence(
@@ -223,6 +307,8 @@ def crossfade_join(
     output_path: str,
     crossfade_ms: float = 50,
     output_format: str = "wav",
+    resample: bool = True,
+    target_sample_rate: Optional[int] = None,
 ) -> CrossfadeResult:
     """Concatenate audio files with smooth crossfade transitions.
 
@@ -235,6 +321,10 @@ def crossfade_join(
         crossfade_ms: Duration of crossfade overlap in milliseconds. Default: 50ms.
             Typical values: 20-50ms for dialogue, 100-200ms for music.
         output_format: Output format ('mp3', 'wav', 'm4a'). Default: 'wav'.
+        resample: If True, resample all files to a common sample rate before joining.
+            This prevents static/noise artifacts from sample rate mismatches.
+        target_sample_rate: Target sample rate when resample=True. If None, uses
+            the sample rate of the first file.
 
     Returns:
         CrossfadeResult with output info.
@@ -242,7 +332,8 @@ def crossfade_join(
     Raises:
         RuntimeError: If ffmpeg is not installed.
         FileNotFoundError: If any input file doesn't exist.
-        ValueError: If no audio paths provided or format unsupported.
+        ValueError: If no audio paths provided, format unsupported, or sample rate
+            mismatch detected without resample=True.
     """
     if not check_ffmpeg():
         raise RuntimeError("ffmpeg is not installed or not in PATH")
@@ -258,12 +349,57 @@ def crossfade_join(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Input file not found: {path}")
 
+    # Check for sample rate mismatches
+    sample_rates = {}
+    for path in audio_paths:
+        props = get_audio_properties(path)
+        sample_rates[path] = props.sample_rate
+
+    unique_rates = set(sample_rates.values())
+    paths_to_use = audio_paths
+    temp_dir = None
+
+    if len(unique_rates) > 1:
+        if resample:
+            # Resample to target rate (or first file's rate)
+            if target_sample_rate is None:
+                target_sample_rate = sample_rates[audio_paths[0]]
+
+            import tempfile
+
+            temp_dir = tempfile.mkdtemp()
+            resampled_paths = []
+
+            for i, path in enumerate(audio_paths):
+                if sample_rates[path] != target_sample_rate:
+                    temp_path = os.path.join(temp_dir, f"resampled_{i}.wav")
+                    _resample_audio(path, temp_path, target_sample_rate)
+                    resampled_paths.append(temp_path)
+                else:
+                    resampled_paths.append(path)
+
+            paths_to_use = resampled_paths
+        else:
+            # Report mismatch error
+            rate_info = ", ".join(f"{os.path.basename(p)}: {r}Hz" for p, r in sample_rates.items())
+            raise ValueError(
+                f"Sample rate mismatch detected: {rate_info}. "
+                f"Use resample=True to auto-convert, or resample files manually."
+            )
+
     # Create output directory if needed
     output_path_obj = Path(output_path)
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-    # Perform crossfade concatenation
-    _crossfade(audio_paths, output_path, crossfade_ms, output_format)
+    try:
+        # Perform crossfade concatenation
+        _crossfade(paths_to_use, output_path, crossfade_ms, output_format)
+    finally:
+        # Clean up temp files
+        if temp_dir:
+            import shutil
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Get output info
     duration = get_audio_duration(output_path)

@@ -227,6 +227,185 @@ def generate(
     return tts_engine.generate(text=text, output_path=Path(output_path), **kwargs)
 
 
+def batch_generate(
+    segments: list[dict],
+    engine: str = "maya1",
+    output_dir: Optional[str] = None,
+    continue_on_error: bool = True,
+    auto_convert_tags: bool = True,
+    **kwargs,
+) -> dict:
+    """Generate audio for multiple text segments at once.
+
+    Processes a manifest of segments and generates audio for each.
+    Much more efficient than calling generate() individually as it keeps
+    the model loaded between segments.
+
+    Args:
+        segments: List of segment dictionaries, each containing:
+            - text: The text to synthesize (required)
+            - output_path: Output filename or path (required)
+            - Any engine-specific overrides (optional)
+        engine: Engine ID to use for all segments (default: "maya1")
+        output_dir: Directory for output files. If segment output_path is just
+            a filename, it will be placed in this directory.
+        continue_on_error: If True, continue with remaining segments if one fails.
+        auto_convert_tags: If True, automatically convert paralinguistic tags to
+            the correct format for the target engine (e.g., [laugh] -> <laugh>).
+        **kwargs: Default parameters for all segments (can be overridden per-segment)
+
+    Returns:
+        Dict with:
+        - status: "success", "partial", or "error"
+        - total: Total number of segments
+        - succeeded: Number of successfully generated
+        - failed: Number of failed segments
+        - results: List of result dicts for each segment
+        - failed_segments: List of segment indices that failed
+
+    Example:
+        # Generate a batch of segments for an audiobook
+        segments = [
+            {"text": "Chapter one. The beginning.", "output_path": "chapter_01_001.wav"},
+            {"text": "It was a dark and stormy night.", "output_path": "chapter_01_002.wav"},
+            {"text": "[sigh] Here we go again.", "output_path": "chapter_01_003.wav"},
+        ]
+
+        result = batch_generate(
+            segments=segments,
+            engine="chatterbox",
+            output_dir="/path/to/output/",
+            reference_audio_paths=["/path/to/narrator.wav"],
+            exaggeration=0.6,
+        )
+
+        print(f"Generated {result['succeeded']}/{result['total']} segments")
+    """
+    from ..analysis import convert_tags_for_engine
+
+    if not segments:
+        return {
+            "status": "error",
+            "error": "No segments provided",
+            "total": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "results": [],
+            "failed_segments": [],
+        }
+
+    # Get the engine instance (keeps model loaded)
+    tts_engine = get_engine(engine)
+
+    if not tts_engine.is_available():
+        return {
+            "status": "error",
+            "error": f"Engine '{engine}' is not available. {tts_engine.get_setup_instructions()}",
+            "total": len(segments),
+            "succeeded": 0,
+            "failed": len(segments),
+            "results": [],
+            "failed_segments": list(range(len(segments))),
+        }
+
+    results = []
+    failed_segments = []
+    succeeded = 0
+
+    for i, segment in enumerate(segments):
+        segment_result = {
+            "index": i,
+            "text": segment.get("text", ""),
+        }
+
+        try:
+            # Validate required fields
+            if "text" not in segment:
+                raise ValueError("Segment missing required 'text' field")
+            if "output_path" not in segment:
+                raise ValueError("Segment missing required 'output_path' field")
+
+            text = segment["text"]
+            output_path = segment["output_path"]
+
+            # Auto-convert tags if enabled
+            if auto_convert_tags:
+                conversion = convert_tags_for_engine(text, engine)
+                text = conversion["converted_text"]
+                if conversion.get("changes_made"):
+                    segment_result["tag_conversions"] = conversion["changes_made"]
+                if conversion.get("unsupported_tags"):
+                    segment_result["unsupported_tags"] = conversion["unsupported_tags"]
+
+            # Handle output directory
+            if output_dir:
+                output_path_obj = Path(output_path)
+                if not output_path_obj.is_absolute():
+                    output_path = str(Path(output_dir) / output_path)
+
+            # Merge segment-specific params with defaults
+            segment_params = {**kwargs}
+            for key, value in segment.items():
+                if key not in ("text", "output_path"):
+                    segment_params[key] = value
+
+            # Generate audio
+            tts_result = tts_engine.generate(
+                text=text,
+                output_path=Path(output_path),
+                **segment_params,
+            )
+
+            if tts_result.status == "success":
+                segment_result["status"] = "success"
+                segment_result["output_path"] = str(tts_result.output_path)
+                segment_result["duration_ms"] = tts_result.duration_ms
+                segment_result["sample_rate"] = tts_result.sample_rate
+                succeeded += 1
+            else:
+                segment_result["status"] = "error"
+                segment_result["error"] = tts_result.error
+                failed_segments.append(i)
+
+        except Exception as e:
+            segment_result["status"] = "error"
+            segment_result["error"] = str(e)
+            failed_segments.append(i)
+
+            if not continue_on_error:
+                results.append(segment_result)
+                # Mark remaining segments as skipped
+                for j in range(i + 1, len(segments)):
+                    results.append(
+                        {
+                            "index": j,
+                            "status": "skipped",
+                            "text": segments[j].get("text", ""),
+                        }
+                    )
+                    failed_segments.append(j)
+                break
+
+        results.append(segment_result)
+
+    # Determine overall status
+    if succeeded == len(segments):
+        status = "success"
+    elif succeeded > 0:
+        status = "partial"
+    else:
+        status = "error"
+
+    return {
+        "status": status,
+        "total": len(segments),
+        "succeeded": succeeded,
+        "failed": len(failed_segments),
+        "results": results,
+        "failed_segments": failed_segments,
+    }
+
+
 # ============================================================================
 # Status and Diagnostics
 # ============================================================================
@@ -396,6 +575,7 @@ __all__ = [
     "get_all_engine_speeds",
     # Generation
     "generate",
+    "batch_generate",
     # Status
     "check_tts",
     "get_tts_info",
