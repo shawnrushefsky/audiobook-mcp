@@ -12,9 +12,22 @@ from ...utils.ffmpeg import (
     apply_audio_fade as _apply_fade,
     apply_audio_effects as _apply_effects,
     overlay_audio_at_position as _overlay_audio,
+    normalize_to_lufs as _normalize_to_lufs,
+    measure_audio_levels as _measure_levels,
+    overlay_multiple_tracks as _overlay_multiple,
 )
 
-from .types import MixResult, VolumeResult, FadeResult, EffectsResult, OverlayResult
+from .types import (
+    MixResult,
+    VolumeResult,
+    FadeResult,
+    EffectsResult,
+    OverlayResult,
+    LufsNormalizeResult,
+    MeanLevelResult,
+    MultiOverlayResult,
+    LevelComparisonResult,
+)
 
 
 def mix_audio(
@@ -356,4 +369,270 @@ def overlay_audio(
         duration_ms=duration,
         overlay_position_ms=position_ms,
         overlay_volume=overlay_volume,
+    )
+
+
+def normalize_to_lufs(
+    input_path: str,
+    output_path: Optional[str] = None,
+    target_lufs: float = -20.0,
+    true_peak: float = -1.5,
+) -> LufsNormalizeResult:
+    """Normalize audio to a specific LUFS target.
+
+    Uses ffmpeg's loudnorm filter for broadcast-standard normalization.
+    This is the preferred method for SFX mixing where you need precise
+    loudness matching.
+
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_lufs' suffix.
+        target_lufs: Target integrated loudness in LUFS (default: -20).
+            Common values:
+            - -16 LUFS: Broadcast standard (TV, radio)
+            - -14 LUFS: Streaming platforms (Spotify, YouTube)
+            - -20 LUFS: Good for SFX mixing headroom
+            - -23 LUFS: EBU R128 standard
+        true_peak: Maximum true peak in dBTP (default: -1.5).
+
+    Returns:
+        LufsNormalizeResult with input/output paths and LUFS info.
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        FileNotFoundError: If input file doesn't exist.
+
+    Example:
+        # Normalize SFX to -20 LUFS for mixing
+        result = normalize_to_lufs("explosion.wav", target_lufs=-20)
+
+        # Normalize for broadcast
+        result = normalize_to_lufs("podcast.wav", target_lufs=-16)
+    """
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    input_path_obj = Path(input_path)
+
+    if not input_path_obj.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    # Determine output path
+    if output_path is None:
+        stem = input_path_obj.stem
+        suffix = input_path_obj.suffix
+        output_path = str(input_path_obj.with_name(f"{stem}_lufs{suffix}"))
+
+    # Normalize to target LUFS
+    result = _normalize_to_lufs(input_path, output_path, target_lufs, true_peak)
+
+    # Get duration
+    duration = get_audio_duration(output_path)
+
+    return LufsNormalizeResult(
+        input_path=input_path,
+        output_path=output_path,
+        duration_ms=duration,
+        target_lufs=target_lufs,
+        input_lufs=result.get("input_lufs"),
+    )
+
+
+def get_mean_level(audio_path: str) -> MeanLevelResult:
+    """Get quick mean dB level of an audio file.
+
+    A simpler alternative to analyze_audio_loudness that just returns
+    the key values you need for mixing decisions.
+
+    Args:
+        audio_path: Path to the audio file.
+
+    Returns:
+        MeanLevelResult with mean_db, peak_db, and rms_db.
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        FileNotFoundError: If audio file doesn't exist.
+
+    Example:
+        # Quick level check before mixing
+        level = get_mean_level("narration.wav")
+        print(f"Mean: {level.mean_db:.1f} dB, Peak: {level.peak_db:.1f} dB")
+    """
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    # Measure levels
+    levels = _measure_levels(audio_path)
+    duration = get_audio_duration(audio_path)
+
+    return MeanLevelResult(
+        path=audio_path,
+        mean_db=levels["mean_db"],
+        peak_db=levels["peak_db"],
+        rms_db=levels["rms_db"],
+        duration_ms=duration,
+    )
+
+
+def compare_levels(path1: str, path2: str) -> LevelComparisonResult:
+    """Compare audio levels between two files.
+
+    Shows the dB difference to predict if one sound will be audible
+    when mixed with another. Useful for checking if SFX will be heard
+    over narration or background music.
+
+    Args:
+        path1: Path to first audio file.
+        path2: Path to second audio file.
+
+    Returns:
+        LevelComparisonResult with:
+        - Mean dB for each file
+        - Difference in dB
+        - Which file is louder
+        - Audibility prediction
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        FileNotFoundError: If either file doesn't exist.
+
+    Example:
+        # Check if SFX will be heard over narration
+        result = compare_levels("sfx.wav", "narration.wav")
+        print(f"Difference: {result.difference_db:.1f} dB")
+        print(result.audibility_prediction)
+    """
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if not os.path.exists(path1):
+        raise FileNotFoundError(f"File not found: {path1}")
+    if not os.path.exists(path2):
+        raise FileNotFoundError(f"File not found: {path2}")
+
+    # Measure both files
+    levels1 = _measure_levels(path1)
+    levels2 = _measure_levels(path2)
+
+    mean1 = levels1["mean_db"]
+    mean2 = levels2["mean_db"]
+    diff = mean1 - mean2
+
+    # Determine which is louder
+    if abs(diff) < 1:
+        louder = "approximately equal"
+    elif diff > 0:
+        louder = path1
+    else:
+        louder = path2
+
+    # Predict audibility
+    abs_diff = abs(diff)
+    if abs_diff < 3:
+        prediction = "Both will be clearly audible - similar levels"
+    elif abs_diff < 6:
+        prediction = "Both audible, but one will be noticeably louder"
+    elif abs_diff < 12:
+        prediction = "Quieter track may be hard to hear in mix"
+    elif abs_diff < 20:
+        prediction = "Quieter track likely inaudible over louder one"
+    else:
+        prediction = "Extreme difference - quieter track will be masked"
+
+    return LevelComparisonResult(
+        path1=path1,
+        path2=path2,
+        path1_mean_db=mean1,
+        path2_mean_db=mean2,
+        difference_db=round(diff, 2),
+        louder_file=louder,
+        audibility_prediction=prediction,
+    )
+
+
+def overlay_multiple(
+    base_path: str,
+    overlays: list[dict],
+    output_path: str,
+) -> MultiOverlayResult:
+    """Overlay multiple audio tracks onto a base track in one call.
+
+    More efficient than chaining multiple overlay_audio calls. Places
+    all SFX/music at their specified positions in a single ffmpeg pass.
+
+    Args:
+        base_path: Path to the base audio file (e.g., narration).
+        overlays: List of overlay dicts, each with:
+            - path: Path to overlay audio file (required)
+            - position_ms: Position in base where overlay starts (default: 0)
+            - volume: Volume multiplier for overlay (default: 1.0)
+        output_path: Path for the output file.
+
+    Returns:
+        MultiOverlayResult with paths and overlay info.
+
+    Raises:
+        RuntimeError: If ffmpeg is not installed.
+        FileNotFoundError: If any input file doesn't exist.
+        ValueError: If no overlays provided.
+
+    Example:
+        # Add multiple SFX to narration
+        result = overlay_multiple(
+            base_path="narration.wav",
+            overlays=[
+                {"path": "door_open.wav", "position_ms": 1500, "volume": 0.8},
+                {"path": "footsteps.wav", "position_ms": 3000, "volume": 0.6},
+                {"path": "thunder.wav", "position_ms": 8000, "volume": 1.0},
+            ],
+            output_path="scene_with_sfx.wav",
+        )
+    """
+    if not check_ffmpeg():
+        raise RuntimeError("ffmpeg is not installed or not in PATH")
+
+    if not overlays:
+        raise ValueError("No overlays provided")
+
+    if not os.path.exists(base_path):
+        raise FileNotFoundError(f"Base file not found: {base_path}")
+
+    for i, overlay in enumerate(overlays):
+        if "path" not in overlay:
+            raise ValueError(f"Overlay {i} missing 'path' key")
+        if not os.path.exists(overlay["path"]):
+            raise FileNotFoundError(f"Overlay file not found: {overlay['path']}")
+
+    # Create output directory if needed
+    output_path_obj = Path(output_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    # Apply all overlays
+    _overlay_multiple(base_path, overlays, output_path)
+
+    # Get duration
+    duration = get_audio_duration(output_path)
+
+    # Build applied overlay info
+    overlays_applied = []
+    for overlay in overlays:
+        overlays_applied.append(
+            {
+                "path": overlay["path"],
+                "position_ms": overlay.get("position_ms", 0),
+                "volume": overlay.get("volume", 1.0),
+            }
+        )
+
+    return MultiOverlayResult(
+        base_path=base_path,
+        output_path=output_path,
+        duration_ms=duration,
+        overlay_count=len(overlays),
+        overlays_applied=overlays_applied,
     )

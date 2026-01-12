@@ -206,3 +206,50 @@ class AudioCompatibilityResult:
     sample_rates: dict[str, int]
     channels: dict[str, int]
     recommendation: Optional[str] = None
+
+
+@dataclass
+class LufsNormalizeResult:
+    """Result of LUFS normalization."""
+
+    input_path: str
+    output_path: str
+    duration_ms: int
+    target_lufs: float
+    input_lufs: Optional[float] = None
+    output_lufs: Optional[float] = None
+
+
+@dataclass
+class MeanLevelResult:
+    """Result of mean level analysis."""
+
+    path: str
+    mean_db: float
+    peak_db: float
+    rms_db: float
+    duration_ms: int
+
+
+@dataclass
+class MultiOverlayResult:
+    """Result of overlaying multiple audio tracks."""
+
+    base_path: str
+    output_path: str
+    duration_ms: int
+    overlay_count: int
+    overlays_applied: list[dict]
+
+
+@dataclass
+class LevelComparisonResult:
+    """Result of comparing audio levels between two files."""
+
+    path1: str
+    path2: str
+    path1_mean_db: float
+    path2_mean_db: float
+    difference_db: float
+    louder_file: str
+    audibility_prediction: str

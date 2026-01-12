@@ -743,3 +743,84 @@ def loop_audio_to_duration(
         "actual_duration_ms": actual_duration_ms,
         "loop_count": loop_count,
     }
+
+
+def batch_normalize_to_lufs(
+    audio_paths: list[str],
+    target_lufs: float = -20.0,
+    output_dir: Optional[str] = None,
+    suffix: str = "_lufs",
+) -> list[dict]:
+    """Normalize multiple audio files to the same LUFS target.
+
+    Ensures all files in a batch have consistent loudness levels,
+    making them easier to mix together. Uses ffmpeg's loudnorm filter.
+
+    Args:
+        audio_paths: List of paths to audio files to normalize.
+        target_lufs: Target integrated loudness in LUFS. Default: -20.
+            Common values: -16 (broadcast), -14 (streaming), -20 (SFX mixing).
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with the suffix appended.
+        suffix: Suffix to append to output filenames. Default: "_lufs".
+
+    Returns:
+        List of dicts with results for each file:
+        - path: The input file path
+        - status: "success" or "error"
+        - output_path: Path to normalized file (if success)
+        - duration_ms: Duration of the output
+        - target_lufs: The LUFS target used
+        - input_lufs: Original file's LUFS (if measured)
+        - error: Error message (if status is "error")
+
+    Example:
+        # Normalize all SFX to -20 LUFS for consistent mixing
+        results = batch_normalize_to_lufs(
+            ["explosion.wav", "footstep.wav", "door.wav"],
+            target_lufs=-20,
+            output_dir="/path/to/normalized/"
+        )
+    """
+    from .design import normalize_to_lufs as _normalize_to_lufs_impl
+
+    results = []
+
+    for input_path in audio_paths:
+        result_dict = {"path": input_path, "target_lufs": target_lufs}
+
+        try:
+            input_path_obj = Path(input_path)
+
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                output_path = str(out_dir / f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}")
+            else:
+                output_path = str(
+                    input_path_obj.with_name(
+                        f"{input_path_obj.stem}{suffix}{input_path_obj.suffix}"
+                    )
+                )
+
+            norm_result = _normalize_to_lufs_impl(
+                input_path=input_path,
+                output_path=output_path,
+                target_lufs=target_lufs,
+            )
+
+            result_dict.update(
+                {
+                    "status": "success",
+                    "output_path": norm_result.output_path,
+                    "duration_ms": norm_result.duration_ms,
+                    "input_lufs": norm_result.input_lufs,
+                }
+            )
+
+        except Exception as e:
+            result_dict.update({"status": "error", "error": str(e)})
+
+        results.append(result_dict)
+
+    return results

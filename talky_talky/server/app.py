@@ -88,6 +88,12 @@ from ..tools.audio import (
     batch_normalize_audio,
     generate_silence,
     loop_audio_to_duration,
+    # SFX mixing tools
+    normalize_to_lufs,
+    get_mean_level,
+    compare_levels,
+    overlay_multiple,
+    batch_normalize_to_lufs,
 )
 
 # Import autotune module
@@ -3555,6 +3561,251 @@ def smart_trim_to_speech(
         padding_after_ms=padding_after_ms,
         search_window_ms=search_window_ms,
     )
+
+
+# ============================================================================
+# SFX Mixing Tools
+# ============================================================================
+
+
+@mcp.tool()
+def normalize_sfx_to_level(
+    audio_path: str,
+    output_path: Optional[str] = None,
+    target_lufs: float = -20.0,
+    true_peak: float = -1.5,
+) -> dict:
+    """Normalize audio to a specific LUFS target for consistent mixing.
+
+    Uses ffmpeg's loudnorm filter for broadcast-standard normalization.
+    This is the preferred method for SFX mixing where you need precise
+    loudness matching.
+
+    Args:
+        audio_path: Path to the input audio file.
+        output_path: Optional output path. If not provided, creates a file
+            with '_lufs' suffix.
+        target_lufs: Target integrated loudness in LUFS (default: -20).
+            Common values:
+            - -16 LUFS: Broadcast standard (TV, radio)
+            - -14 LUFS: Streaming platforms (Spotify, YouTube)
+            - -20 LUFS: Good for SFX mixing headroom
+            - -23 LUFS: EBU R128 standard
+        true_peak: Maximum true peak in dBTP (default: -1.5).
+
+    Returns:
+        Dict with:
+        - input_path: Original file path
+        - output_path: Normalized file path
+        - duration_ms: Duration of output
+        - target_lufs: Target LUFS used
+        - input_lufs: Original file's LUFS (if measured)
+
+    Example:
+        # Normalize SFX to -20 LUFS for mixing
+        result = normalize_sfx_to_level("explosion.wav", target_lufs=-20)
+    """
+    resolved_output = resolve_output_path(output_path) if output_path else None
+
+    result = normalize_to_lufs(
+        input_path=audio_path,
+        output_path=resolved_output,
+        target_lufs=target_lufs,
+        true_peak=true_peak,
+    )
+
+    return {
+        "input_path": result.input_path,
+        "output_path": result.output_path,
+        "duration_ms": result.duration_ms,
+        "target_lufs": result.target_lufs,
+        "input_lufs": result.input_lufs,
+    }
+
+
+@mcp.tool()
+def get_audio_mean_level(audio_path: str) -> dict:
+    """Get quick mean dB level of an audio file.
+
+    A simpler alternative to analyze_audio_loudness that just returns
+    the key values you need for mixing decisions.
+
+    Args:
+        audio_path: Path to the audio file.
+
+    Returns:
+        Dict with:
+        - path: Audio file path
+        - mean_db: Mean volume in dB
+        - peak_db: Peak volume in dB
+        - rms_db: RMS level in dB
+        - duration_ms: Duration of audio
+
+    Example:
+        # Quick level check before mixing
+        level = get_audio_mean_level("narration.wav")
+        print(f"Mean: {level['mean_db']:.1f} dB, Peak: {level['peak_db']:.1f} dB")
+    """
+    result = get_mean_level(audio_path)
+
+    return {
+        "path": result.path,
+        "mean_db": result.mean_db,
+        "peak_db": result.peak_db,
+        "rms_db": result.rms_db,
+        "duration_ms": result.duration_ms,
+    }
+
+
+@mcp.tool()
+def compare_audio_levels(path1: str, path2: str) -> dict:
+    """Compare audio levels between two files.
+
+    Shows the dB difference to predict if one sound will be audible
+    when mixed with another. Useful for checking if SFX will be heard
+    over narration or background music.
+
+    Args:
+        path1: Path to first audio file.
+        path2: Path to second audio file.
+
+    Returns:
+        Dict with:
+        - path1: First file path
+        - path2: Second file path
+        - path1_mean_db: Mean dB of first file
+        - path2_mean_db: Mean dB of second file
+        - difference_db: dB difference (positive if path1 is louder)
+        - louder_file: Which file is louder
+        - audibility_prediction: Prediction of how audible each will be in mix
+
+    Example:
+        # Check if SFX will be heard over narration
+        result = compare_audio_levels("sfx.wav", "narration.wav")
+        print(f"Difference: {result['difference_db']:.1f} dB")
+        print(result['audibility_prediction'])
+    """
+    result = compare_levels(path1, path2)
+
+    return {
+        "path1": result.path1,
+        "path2": result.path2,
+        "path1_mean_db": result.path1_mean_db,
+        "path2_mean_db": result.path2_mean_db,
+        "difference_db": result.difference_db,
+        "louder_file": result.louder_file,
+        "audibility_prediction": result.audibility_prediction,
+    }
+
+
+@mcp.tool()
+def overlay_multiple_tracks(
+    base_path: str,
+    overlays: list[dict],
+    output_path: str,
+) -> dict:
+    """Overlay multiple audio tracks onto a base track in one call.
+
+    More efficient than chaining multiple overlay_audio_track calls. Places
+    all SFX/music at their specified positions in a single ffmpeg pass.
+
+    Args:
+        base_path: Path to the base audio file (e.g., narration).
+        overlays: List of overlay dicts, each with:
+            - path: Path to overlay audio file (required)
+            - position_ms: Position in base where overlay starts (default: 0)
+            - volume: Volume multiplier for overlay (default: 1.0)
+        output_path: Path for the output file.
+
+    Returns:
+        Dict with:
+        - base_path: Base audio path
+        - output_path: Output file path
+        - duration_ms: Duration of output
+        - overlay_count: Number of overlays applied
+        - overlays_applied: List of overlay details
+
+    Example:
+        # Add multiple SFX to narration in one call
+        result = overlay_multiple_tracks(
+            base_path="narration.wav",
+            overlays=[
+                {"path": "door_open.wav", "position_ms": 1500, "volume": 0.8},
+                {"path": "footsteps.wav", "position_ms": 3000, "volume": 0.6},
+                {"path": "thunder.wav", "position_ms": 8000, "volume": 1.0},
+            ],
+            output_path="scene_with_sfx.wav",
+        )
+    """
+    resolved_output = resolve_output_path(output_path)
+
+    result = overlay_multiple(
+        base_path=base_path,
+        overlays=overlays,
+        output_path=resolved_output,
+    )
+
+    return {
+        "base_path": result.base_path,
+        "output_path": result.output_path,
+        "duration_ms": result.duration_ms,
+        "overlay_count": result.overlay_count,
+        "overlays_applied": result.overlays_applied,
+    }
+
+
+@mcp.tool()
+def batch_normalize_sfx_to_lufs(
+    audio_paths: list[str],
+    target_lufs: float = -20.0,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Normalize multiple audio files to the same LUFS target.
+
+    Ensures all files in a batch have consistent loudness levels,
+    making them easier to mix together. Uses ffmpeg's loudnorm filter.
+
+    Args:
+        audio_paths: List of paths to audio files to normalize.
+        target_lufs: Target integrated loudness in LUFS. Default: -20.
+            Common values: -16 (broadcast), -14 (streaming), -20 (SFX mixing).
+        output_dir: Directory for output files. If None, outputs are created
+            in the same directory as inputs with '_lufs' suffix.
+
+    Returns:
+        Dict with:
+        - total: Total number of files processed
+        - succeeded: Number successfully normalized
+        - failed: Number that failed
+        - target_lufs: Target LUFS used
+        - results: List of result dicts for each file
+
+    Example:
+        # Normalize all SFX to -20 LUFS for consistent mixing
+        result = batch_normalize_sfx_to_lufs(
+            ["explosion.wav", "footstep.wav", "door.wav"],
+            target_lufs=-20,
+            output_dir="/path/to/normalized/"
+        )
+    """
+    resolved_output_dir = resolve_output_path(output_dir) if output_dir else None
+
+    results = batch_normalize_to_lufs(
+        audio_paths=audio_paths,
+        target_lufs=target_lufs,
+        output_dir=resolved_output_dir,
+    )
+
+    succeeded = sum(1 for r in results if r.get("status") == "success")
+    failed = len(results) - succeeded
+
+    return {
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": failed,
+        "target_lufs": target_lufs,
+        "results": results,
+    }
 
 
 # ============================================================================

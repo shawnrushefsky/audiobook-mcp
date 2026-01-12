@@ -19,6 +19,9 @@ from .core import (
 from .format import (
     convert_audio_format,
     normalize_audio,
+    normalize_to_lufs,
+    measure_audio_levels,
+    overlay_multiple_tracks,
 )
 from .concat import (
     concatenate_audio_files,
@@ -52,6 +55,9 @@ __all__ = [
     # Format conversion
     "convert_audio_format",
     "normalize_audio",
+    "normalize_to_lufs",
+    "measure_audio_levels",
+    "overlay_multiple_tracks",
     # Concatenation
     "concatenate_audio_files",
     "concatenate_with_gaps",

@@ -23,6 +23,10 @@ from .types import (
     FormantShiftResult,
     ResampleResult,
     AudioCompatibilityResult,
+    LufsNormalizeResult,
+    MeanLevelResult,
+    MultiOverlayResult,
+    LevelComparisonResult,
 )
 from .utilities import (
     get_audio_info,
@@ -35,6 +39,7 @@ from .utilities import (
     batch_normalize_audio,
     generate_silence,
     loop_audio_to_duration,
+    batch_normalize_to_lufs,
 )
 from .trimming import (
     trim_audio,
@@ -49,6 +54,10 @@ from .design import (
     apply_fade,
     apply_effects,
     overlay_audio,
+    normalize_to_lufs,
+    get_mean_level,
+    compare_levels,
+    overlay_multiple,
 )
 from .modulation import (
     VOICE_EFFECTS,
@@ -78,6 +87,10 @@ __all__ = [
     "FormantShiftResult",
     "ResampleResult",
     "AudioCompatibilityResult",
+    "LufsNormalizeResult",
+    "MeanLevelResult",
+    "MultiOverlayResult",
+    "LevelComparisonResult",
     # Audio utilities
     "get_audio_info",
     "convert_audio",
@@ -89,6 +102,7 @@ __all__ = [
     "batch_normalize_audio",
     "generate_silence",
     "loop_audio_to_duration",
+    "batch_normalize_to_lufs",
     # Trimming utilities
     "trim_audio",
     "batch_trim_audio",
@@ -101,6 +115,10 @@ __all__ = [
     "apply_fade",
     "apply_effects",
     "overlay_audio",
+    "normalize_to_lufs",
+    "get_mean_level",
+    "compare_levels",
+    "overlay_multiple",
     # Voice modulation
     "VOICE_EFFECTS",
     "shift_pitch",
